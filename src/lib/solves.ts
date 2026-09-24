@@ -16,7 +16,14 @@ export type Solve = {
   session: string;
   /** Inspection used, in ms, when inspection was on. */
   inspectionMs?: number;
+  /** OLL case you solved it with, like `oll-21`. Optional. */
+  oll?: string;
+  /** PLL case you solved it with, like `pll-t`. Optional. */
+  pll?: string;
 };
+
+/** The last-layer steps a solve can be tagged with. */
+export type SolveStep = "oll" | "pll";
 
 export type Session = { id: string; name: string };
 
@@ -51,6 +58,11 @@ export function addSolve(solve: Omit<Solve, "id" | "session">): Solve {
 
 export function setPenalty(id: string, penalty: Penalty) {
   timerStore.update((d) => ({ ...d, solves: d.solves.map((s) => (s.id === id ? { ...s, penalty } : s)) }));
+}
+
+/** Tag a solve with the OLL or PLL case it had, or clear it with undefined. */
+export function setSolveCase(id: string, step: SolveStep, caseId: string | undefined) {
+  timerStore.update((d) => ({ ...d, solves: d.solves.map((s) => (s.id === id ? { ...s, [step]: caseId } : s)) }));
 }
 
 export function deleteSolve(id: string) {

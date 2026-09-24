@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import Link from "next/link";
 import { MoveSequence } from "@/components/algs/move-sequence";
+import { CasePicker } from "@/components/timer/case-picker";
 import { PenaltyToggle } from "@/components/timer/penalty-toggle";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -45,6 +46,10 @@ export function SolveList({ solves, times, onDelete }: { solves: Solve[]; times:
                     {dateFormat.format(solve.at)}
                     {solve.inspectionMs !== undefined && `. Inspection ${formatMs(solve.inspectionMs, 1)} s`}
                   </p>
+                  <div className="-ml-2.5 flex items-center gap-1">
+                    <CasePicker solve={solve} step="oll" />
+                    <CasePicker solve={solve} step="pll" />
+                  </div>
                   <div className="flex items-center justify-between gap-2">
                     <PenaltyToggle solve={solve} />
                     <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-missed" onClick={() => onDelete(solve)}>

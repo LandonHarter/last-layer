@@ -7,6 +7,7 @@ import { MoveSequence } from "@/components/algs/move-sequence";
 import { ScrambleNet } from "@/components/timer/scramble-net";
 import { SessionPicker } from "@/components/timer/session-picker";
 import { SolveList } from "@/components/timer/solve-list";
+import { CasePicker } from "@/components/timer/case-picker";
 import { PenaltyToggle } from "@/components/timer/penalty-toggle";
 import { SessionStats } from "@/components/timer/session-stats";
 import { Button } from "@/components/ui/button";
@@ -310,6 +311,12 @@ export function TimerView() {
               </p>
             )}
           </div>
+          {last && (
+            <div className={cn("mt-1 flex items-center gap-1", hideWhileTiming)} onPointerDown={(e) => e.stopPropagation()}>
+              <CasePicker solve={last} step="oll" />
+              <CasePicker solve={last} step="pll" />
+            </div>
+          )}
         </div>
 
         <ScrambleNet scramble={scramble} className={cn("mx-auto w-44 sm:absolute sm:bottom-6 sm:left-6 sm:w-48", hideWhileTiming)} />

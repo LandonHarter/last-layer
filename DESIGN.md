@@ -57,17 +57,17 @@ Sticker palettes for the picker previews live in `src/lib/themes.ts`, because th
   - Session: case image on the left (5fr), work column on the right (7fr). The work column holds setup moves with a New setup button, then the Reveal card (name, group, your algorithm, link to all algorithms, status toggle), then Missed and Got it buttons. Setups are random and never just undo your algorithm. On mobile this stacks, with a smaller image so the buttons stay reachable.
   - Keyboard: Space reveals, J/← is Missed, K/→ is Got it, N gives a new setup, Esc ends the session.
 - **Timer (`/timer`):**
-  - Main column: the scramble in mono at the top with the session select, New scramble and Settings; the clock in the middle; ao5 and ao12 under it; penalty (OK / +2 / DNF) and Delete for the last solve. The unfolded scramble (white top, green front, in the theme's sticker colors) sits bottom-left.
-  - Sidebar (right on desktop, below on mobile): current and best single, mo3, ao5, ao12, ao50, ao100 and mean, then the solve list (latest 200). A row opens its scramble, date and penalty controls.
+  - Main column: the scramble in mono at the top with the session select, New scramble and Settings; the clock in the middle; ao5 and ao12 under it; penalty (OK / +2 / DNF) and Delete for the last solve, then optional OLL and PLL ghost buttons that tag it with the case you had (a popover with search and one row per case: image, name, your main algorithm in muted mono). The unfolded scramble (white top, green front, in the theme's sticker colors) sits bottom-left.
+  - Sidebar (right on desktop, below on mobile): current and best single, mo3, ao5, ao12, ao50, ao100 and mean, then the solve list (latest 200). A row opens its scramble, date, OLL/PLL tags and penalty controls.
   - Clock colors: holding is `missed`, ready is `learned` (stackmat red/green). Inspection turns `learning` after 8 s and `missed` after 15 s.
   - Controls: hold Space for the hold time (0.3 s by default), let go to start; any key or a tap stops. Esc cancels a hold or inspection. On touch, the middle of the page is the pad. Everything but the clock fades out while timing.
 - **Analyze (`/analyze`):**
-  - Title with a Timer solves / Algorithm drills toggle (the same state as the header switch). A sticky filter row scopes everything below: session or set and case, range, and an outlier rule. Outliers are drawn hollow and left out of lines, fits and tests; DNFs never count as outliers.
+  - Title with a Timer solves / Algorithm drills toggle (the same state as the header switch). A sticky filter row scopes everything below: session (plus OLL and PLL case, once you've tagged solves) or set and case, range, and an outlier rule. Outliers are drawn hollow and left out of lines, fits and tests; DNFs never count as outliers.
   - Summary: one hero figure (mean time, or the share you got for drills) with its 95% interval, then a grid of figures.
   - Over time: dots plus rolling averages (toggle each in the legend) and a trend line; by solve or by date, linear or log. Drills add a rolling Got it chart.
   - Distribution: histogram with a normal or log-normal curve, and a Q-Q plot.
   - Tests: Shapiro-Wilk normality, trend regression, Welch comparison of two groups, and chances of beating a time (bootstrapped for ao5 and ao12). Each ends in a plain sentence.
-  - By group: mean (or Got it share) per session, time of day, weekday, month, set, case and so on, with interval whiskers.
+  - By group: mean (or Got it share) per session, OLL, PLL, time of day, weekday, month, set, case and so on, with interval whiskers.
   - Tables: all solves with CSV export and JSON export/import of solves (import merges, and also reads a full backup), or all cases sorted by most missed.
   - Charts are hand-built SVG in `analyze/charts.tsx`: 2px lines, dots with a surface ring, columns at most 24px with a rounded top, hairline gridlines, a crosshair tooltip, and arrow keys to step through values.
 - **Case (`/algs/[id]`):**
@@ -85,7 +85,7 @@ shadcn (base-nova style, Base UI primitives) in `src/components/ui`. App pieces:
 - `algs/`: `CaseImage`, `MoveSequence`, `StatusToggle`, `AlgCard`
 - `library-view.tsx`, `learn-view.tsx`, `drill-view.tsx`: page bodies
 - `backup-menu.tsx`: header backup popover
-- `timer/`: `TimerView`, `ScrambleNet`, `SessionStats`, `SolveList`, `SessionPicker`, `PenaltyToggle`
+- `timer/`: `TimerView`, `ScrambleNet`, `SessionStats`, `SolveList`, `SessionPicker`, `PenaltyToggle`, `CasePicker`
 - `analyze/`: `AnalyzeView`, charts (`TrendChart`, `HistogramChart`, `QQChart`, `GroupBarChart`) and test panels
 
 Case images are VisualCube SVGs in `public/cases/{id}.svg`, yellow top, green front, red right. OLL and PLL use the top-down plan view, and PLL images have arrows. F2L uses the isometric view so the front-right slot shows.

@@ -21,7 +21,7 @@ UI design, tokens and themes are documented in [DESIGN.md](./DESIGN.md). Read it
 - `src/lib/cube.ts`: sticker-level 3x3 simulator, used by the tests and for PLL arrows
 - `src/lib/progress.ts`: `useProgress()` store (`useSyncExternalStore` over localStorage key `last-layer:progress:v1`). An entry also holds `main` (chosen alg) and `custom` (your own algs); read the main with `mainAlg()`.
 - `src/lib/store.ts`: `createStore(key, fallback)`, the localStorage + `useSyncExternalStore` pattern used by the stores below
-- `src/lib/solves.ts`: timer solves and sessions (`last-layer:timer:v1`), timer settings, the drill log (`last-layer:drill-log:v1`, one entry per drill answer), `effectiveMs` (+2 adds 2 s, DNF is `Infinity`) and `formatMs`
+- `src/lib/solves.ts`: timer solves (optionally tagged with an `oll`/`pll` case id via `setSolveCase`) and sessions (`last-layer:timer:v1`), timer settings, the drill log (`last-layer:drill-log:v1`, one entry per drill answer), `effectiveMs` (+2 adds 2 s, DNF is `Infinity`) and `formatMs`
 - `src/lib/mode.ts`: Algorithms/Timer mode (`last-layer:mode:v1`); pages of one mode set it, Analyze follows it
 - `src/lib/stats.ts`: WCA averages (aoN trims 1 each end up to ao12, 5% above; too many DNFs make a DNF), outlier rules, normal/t distributions, Shapiro-Wilk, regression, Welch t-test, histograms
 - `src/lib/scramble.ts`: random-move scrambles (face turns only, no repeated face, no R L R) and the unfolded net for the preview

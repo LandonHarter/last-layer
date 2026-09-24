@@ -4,7 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { DownloadIcon, UploadIcon } from "lucide-react";
 import { toast } from "sonner";
-import { ALGS_BY_ID, SETS } from "@/data/algs";
+import { ALGS, ALGS_BY_ID, SETS } from "@/data/algs";
 import { GroupBarChart, HistogramChart, Legend, QQChart, TrendChart, type Fit, type GroupBar, type TrendLine } from "@/components/analyze/charts";
 import { ChancesTest, CompareTest, NormalityTest, Panel, TrendTest, type Sample } from "@/components/analyze/tests";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -77,6 +77,7 @@ function orderFor(dim: string, values: string[], samples: Sample[]): string[] {
   if (dim === "Time of day") return DAYPARTS.filter((v) => values.includes(v));
   if (dim === "Weekday") return WEEKDAYS.filter((v) => values.includes(v));
   if (dim === "Set") return SETS.filter((v) => values.includes(v));
+  if (dim === "OLL" || dim === "PLL") return [...ALGS.map((a) => a.name), NOT_SET].filter((v) => values.includes(v));
   // Everything else by first appearance, which is chronological for sessions and months.
   const first = new Map<string, number>();
   for (const s of samples) if (!first.has(s.groups[dim])) first.set(s.groups[dim], s.at);
@@ -84,6 +85,9 @@ function orderFor(dim: string, values: string[], samples: Sample[]): string[] {
 }
 
 const seconds = (ms: number) => formatMs(ms);
+
+const NOT_SET = "Not set";
+const caseName = (id: string | undefined) => (id ? (ALGS_BY_ID.get(id)?.name ?? id) : NOT_SET);
 
 // ---------------------------------------------------------------------------
 
@@ -168,14 +172,26 @@ function markOutliers(samples: Omit<Sample, "excluded">[], rule: OutlierRule): S
 function TimerAnalysis() {
   const data = useTimerData();
   const [session, setSession] = useState("all");
+  const [oll, setOll] = useState("all");
+  const [pll, setPll] = useState("all");
   const [range, setRange] = useState("all");
   const [outliers, setOutliers] = useState("none");
 
   const sessionName = useMemo(() => new Map(data.sessions.map((s) => [s.id, s.name])), [data.sessions]);
   const solves = useMemo(() => {
-    const picked = data.solves.filter((s) => session === "all" || s.session === session).sort((a, b) => a.at - b.at);
+    const picked = data.solves
+      .filter((s) => (session === "all" || s.session === session) && (oll === "all" || s.oll === oll) && (pll === "all" || s.pll === pll))
+      .sort((a, b) => a.at - b.at);
     return inRange(picked, range);
-  }, [data.solves, session, range]);
+  }, [data.solves, session, oll, pll, range]);
+  // Only offer cases you've tagged a solve with.
+  const tagged = useMemo(() => {
+    const used = (step: "oll" | "pll") => {
+      const ids = new Set(data.solves.map((s) => s[step]));
+      return ALGS.filter((a) => ids.has(a.id)).map((a) => ({ value: a.id, label: a.name }));
+    };
+    return { oll: used("oll"), pll: used("pll") };
+  }, [data.solves]);
 
   const rule = OUTLIERS.find((o) => o.value === outliers)!.rule;
   const samples = useMemo(
@@ -186,7 +202,7 @@ function TimerAnalysis() {
           at: s.at,
           n: i + 1,
           title: `Solve ${i + 1}, ${dateTime.format(s.at)}`,
-          groups: { Session: sessionName.get(s.session) ?? "Deleted session", ...timeGroups(s.at) },
+          groups: { Session: sessionName.get(s.session) ?? "Deleted session", OLL: caseName(s.oll), PLL: caseName(s.pll), ...timeGroups(s.at) },
         })),
         rule,
       ),
@@ -202,13 +218,19 @@ function TimerAnalysis() {
     <>
       <FilterBar summary={`${samples.length} solves${excluded ? `, ${excluded} left out as outliers` : ""}`}>
         <FilterSelect label="Session" value={session} items={sessionItems} onChange={setSession} />
+        {tagged.oll.length > 0 && (
+          <FilterSelect label="OLL" value={oll} items={[{ value: "all", label: "All OLLs" }, ...tagged.oll]} onChange={setOll} className="min-w-32" />
+        )}
+        {tagged.pll.length > 0 && (
+          <FilterSelect label="PLL" value={pll} items={[{ value: "all", label: "All PLLs" }, ...tagged.pll]} onChange={setPll} className="min-w-32" />
+        )}
         <FilterSelect label="Range" value={range} items={RANGES} onChange={setRange} />
         <FilterSelect label="Outliers" value={outliers} items={OUTLIERS} onChange={setOutliers} className="min-w-52" />
       </FilterBar>
       {samples.length === 0 ? (
         <p className="text-base text-muted-foreground">Nothing in this range. Try All time or another session.</p>
       ) : (
-        <Analysis samples={samples} kind="timer" dimensions={["Session", "Time of day", "Weekday", "Month"]} />
+        <Analysis samples={samples} kind="timer" dimensions={["Session", "OLL", "PLL", "Time of day", "Weekday", "Month"]} />
       )}
       <SolveTable solves={solves} samples={samples} sessionName={sessionName} />
     </>
@@ -530,7 +552,7 @@ function Analysis({ samples, kind, dimensions }: { samples: Sample[]; kind: "tim
             yFormat={measure === "accuracy" && !timer ? pct : undefined}
             yMax={measure === "accuracy" && !timer ? 1 : undefined}
             countLabel={unit}
-            label={`By ${groupBy.toLowerCase()}`}
+            label={`By ${groupBy === groupBy.toUpperCase() ? groupBy : groupBy.toLowerCase()}`}
           />
         </div>
       </section>
@@ -640,7 +662,7 @@ function SolveTable({ solves, samples, sessionName }: { solves: Solve[]; samples
   const current = Math.min(page, pages - 1);
 
   function exportCsv() {
-    const header = ["n", "time_s", "penalty", "raw_ms", "finished", "session", "outlier", "scramble"];
+    const header = ["n", "time_s", "penalty", "raw_ms", "finished", "session", "oll", "pll", "outlier", "scramble"];
     const lines = solves.map((s, i) =>
       [
         i + 1,
@@ -649,6 +671,8 @@ function SolveTable({ solves, samples, sessionName }: { solves: Solve[]; samples
         s.ms,
         new Date(s.at).toISOString(),
         sessionName.get(s.session) ?? "",
+        s.oll ? caseName(s.oll) : "",
+        s.pll ? caseName(s.pll) : "",
         samples[i].excluded ? "yes" : "no",
         s.scramble,
       ].map(csvCell).join(","),
@@ -726,6 +750,8 @@ function SolveTable({ solves, samples, sessionName }: { solves: Solve[]; samples
                 <th scope="col" className="px-4 py-2 font-medium">Time</th>
                 <th scope="col" className="px-4 py-2 font-medium">Finished</th>
                 <th scope="col" className="px-4 py-2 font-medium">Session</th>
+                <th scope="col" className="px-4 py-2 font-medium">OLL</th>
+                <th scope="col" className="px-4 py-2 font-medium">PLL</th>
                 <th scope="col" className="px-4 py-2 font-medium">Scramble</th>
               </tr>
             </thead>
@@ -739,6 +765,8 @@ function SolveTable({ solves, samples, sessionName }: { solves: Solve[]; samples
                   </td>
                   <td className="px-4 py-2 whitespace-nowrap">{dateTime.format(solve.at)}</td>
                   <td className="px-4 py-2 whitespace-nowrap">{sessionName.get(solve.session) ?? ""}</td>
+                  <td className="px-4 py-2 whitespace-nowrap">{solve.oll ? caseName(solve.oll) : ""}</td>
+                  <td className="px-4 py-2 whitespace-nowrap">{solve.pll ? caseName(solve.pll) : ""}</td>
                   <td className="px-4 py-2 font-mono text-xs">{solve.scramble}</td>
                 </tr>
               ))}
