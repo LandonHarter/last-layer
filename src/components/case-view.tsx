@@ -7,13 +7,13 @@ import { toast } from "sonner";
 import { ALGS, ALGS_BY_ID, type Alg } from "@/data/algs";
 import { CaseImage } from "@/components/algs/case-image";
 import { MoveSequence } from "@/components/algs/move-sequence";
+import { NotesField } from "@/components/algs/notes-field";
 import { StatusToggle } from "@/components/algs/status-toggle";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { fitAlg, isValidNotation } from "@/lib/cases";
 import { moveCount } from "@/lib/notation";
-import { addCustom, allAlgs, entryFor, mainAlg, removeCustom, setMain, setNotes, useProgress } from "@/lib/progress";
+import { addCustom, allAlgs, entryFor, mainAlg, removeCustom, setMain, useProgress } from "@/lib/progress";
 import { makeSetup } from "@/lib/setup";
 import { cn } from "@/lib/utils";
 
@@ -85,18 +85,11 @@ export function CaseView({ id }: { id: string }) {
           </section>
 
           <section aria-labelledby="notes-label">
-            <label id="notes-label" htmlFor="case-notes" className="mb-2 block text-sm font-semibold text-muted-foreground">
+            <h2 id="notes-label" className="mb-2 text-sm font-semibold text-muted-foreground">
               Your notes
-            </label>
-            <Textarea
-              id="case-notes"
-              value={entry.notes ?? ""}
-              onChange={(e) => setNotes(alg.id, e.target.value)}
-              placeholder="What helps you remember it, like “Sune from the back, then the sexy move”"
-              aria-describedby="case-notes-hint"
-              className="max-w-xl"
-            />
-            <p id="case-notes-hint" className="mt-2 text-sm text-muted-foreground">
+            </h2>
+            <NotesField id={alg.id} notes={entry.notes} className="max-w-xl" />
+            <p className="mt-2 text-sm text-muted-foreground">
               Drill shows these when you ask for a hint.
             </p>
           </section>

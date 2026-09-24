@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { ALGS, ALGS_BY_ID, SETS, type Alg, type AlgSet } from "@/data/algs";
 import { CaseImage } from "@/components/algs/case-image";
 import { MoveSequence } from "@/components/algs/move-sequence";
+import { NotesField } from "@/components/algs/notes-field";
 import { StatusToggle } from "@/components/algs/status-toggle";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -317,6 +318,10 @@ function Step({ task, data, batch, onNext }: { task: Exclude<Task, { kind: "done
           onChange={(s) => s === "learned" && toast(`${alg.name} is Learned`, { description: "It's out of this batch and will come up in Drill." })}
         />
         {stage !== "pick" && <MainPicker alg={alg} main={main} options={allAlgs(alg, entry)} />}
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-semibold text-muted-foreground">Your notes</span>
+          <NotesField key={alg.id} id={alg.id} notes={entry.notes} className="text-sm md:text-sm" />
+        </div>
       </div>
       <div className="flex min-w-0 flex-col gap-6">{body}</div>
     </div>
@@ -518,7 +523,7 @@ function StudyStep({ alg, main, progress, batch, onDone }: { alg: Alg; main: str
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.metaKey || e.ctrlKey || e.altKey || (e.target instanceof Element && e.target.closest("input, button, a"))) return;
+      if (e.metaKey || e.ctrlKey || e.altKey || (e.target instanceof Element && e.target.closest("input, textarea, button, a"))) return;
       if (e.key === "n") reroll();
       if (phase === "walk" && (e.key === " " || e.key === "ArrowRight")) {
         e.preventDefault();
@@ -663,7 +668,7 @@ function RecallStep({ alg, main, streak, onNext }: { alg: Alg; main: string; str
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.metaKey || e.ctrlKey || e.altKey || (e.target instanceof Element && e.target.closest("input, button, a"))) return;
+      if (e.metaKey || e.ctrlKey || e.altKey || (e.target instanceof Element && e.target.closest("input, textarea, button, a"))) return;
       if (e.key === "n") reroll();
       else if (shown && (e.key === " " || e.key === "Enter")) {
         e.preventDefault();

@@ -49,12 +49,12 @@ Sticker palettes for the picker previews live in `src/lib/themes.ts`, because th
   - Card: case image on a muted tile, name (links to the case page), drill score, your main algorithm in mono, a link to the other algorithms, and a three-way status toggle.
 - **Learn (`/learn`):**
   - Overview: set toggle, cases per batch (3 to 6), learned count, your current batch (cases with stage or streak dots, Continue, Stop this batch), then suggested batches, each with case chips, why they belong together, and Start.
-  - Session: batch strip on top, case image on the left (4fr) with the status toggle and (after Pick) a Your algorithm select under it, the step on the right (8fr). Switching algorithm sends the case back to Study. Cases marked Learned, here or in the Library, drop out of the batch; Pick also has Mark it Learned and skip it. Steps: Pick (every algorithm as chunks with tags, Try it shows a setup, Make it yours, Learn this one), Study (setup, then chunks one at a time with the current one in primary, then From memory with blanks you can tap to peek, plus tips), Recall (setup, Show me or Got it, streak dots).
+  - Session: batch strip on top, case image on the left (4fr) with the status toggle, (after Pick) a Your algorithm select, and a Your notes box under it, the step on the right (8fr). Switching algorithm sends the case back to Study. Cases marked Learned, here or in the Library, drop out of the batch; Pick also has Mark it Learned and skip it. Steps: Pick (every algorithm as chunks with tags, Try it shows a setup, Make it yours, Learn this one), Study (setup, then chunks one at a time with the current one in primary, then From memory with blanks you can tap to peek, plus tips), Recall (setup, Show me or Got it, streak dots).
   - A case is solid after 3 clean recalls in a row. A new case comes in only when fewer than two are shaky and each has one clean recall. A finished batch is marked Learned.
   - Keyboard: Space next chunk or Show me, K Got it, N new setup.
 - **Drill (`/drill`):**
   - Idle: counts of In progress and Learned cases, plus a Start button. With nothing to drill, it shows a message and a link to the Library.
-  - Session: case image on the left (5fr), work column on the right (7fr). The work column holds setup moves with a New setup button, then the Reveal card (a Hint button that shows your notes, if the case has any; after Reveal: name, group, your algorithm, your notes, link to all algorithms, status toggle), then Missed and Got it buttons. Setups are random and never just undo your algorithm. On mobile this stacks, with a smaller image so the buttons stay reachable.
+  - Session: case image on the left (5fr), work column on the right (7fr). The work column holds setup moves with a New setup button, then the Reveal card (a Hint button that shows your notes, if the case has any; after Reveal: name, group, your algorithm, your notes with Edit (or Add notes), link to all algorithms, status toggle). Shortcuts are off while typing in the notes, and Esc there closes the editor, then Missed and Got it buttons. Setups are random and never just undo your algorithm. On mobile this stacks, with a smaller image so the buttons stay reachable.
   - Keyboard: Space reveals, H shows the hint, J/← is Missed, K/→ is Got it, N gives a new setup, Esc ends the session.
 - **Timer (`/timer`):**
   - Main column: the scramble in mono at the top with the session select, New scramble and Settings; the clock in the middle; ao5 and ao12 under it; penalty (OK / +2 / DNF) and Delete for the last solve, then optional OLL and PLL ghost buttons that tag it with the case you had (a popover with search and one row per case: image, name, your main algorithm in muted mono). The unfolded scramble (white top, green front, in the theme's sticker colors) sits bottom-left.
@@ -82,7 +82,7 @@ shadcn (base-nova style, Base UI primitives) in `src/components/ui`. App pieces:
 
 - `cube-art.tsx`: `IsoCube` (isometric 3-face SVG) and `FlatFace` (3x3 button icon)
 - `theme-selector.tsx`: popover picker with the switch animation
-- `algs/`: `CaseImage`, `MoveSequence`, `StatusToggle`, `AlgCard`
+- `algs/`: `CaseImage`, `MoveSequence`, `StatusToggle`, `AlgCard`, `NotesField` (notes textarea shared by the case page, Learn and Drill)
 - `library-view.tsx`, `learn-view.tsx`, `drill-view.tsx`: page bodies
 - `backup-menu.tsx`: header backup popover
 - `timer/`: `TimerView`, `ScrambleNet`, `SessionStats`, `SolveList`, `SessionPicker`, `PenaltyToggle`, `CasePicker`

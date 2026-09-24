@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { LightbulbIcon, RefreshCwIcon } from "lucide-react";
+import { LightbulbIcon, PencilIcon, RefreshCwIcon } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { ALGS, ALGS_BY_ID, SETS, type AlgSet } from "@/data/algs";
 import { CaseImage } from "@/components/algs/case-image";
 import { MoveSequence } from "@/components/algs/move-sequence";
+import { NotesField } from "@/components/algs/notes-field";
 import { StatusToggle } from "@/components/algs/status-toggle";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
@@ -128,6 +129,7 @@ function Session({
 }) {
   const [revealed, setRevealed] = useState(false);
   const [hinted, setHinted] = useState(false);
+  const [editingNotes, setEditingNotes] = useState(false);
   const alg = ALGS_BY_ID.get(session.current)!;
   // When this case appeared, for the answer time in Analyze.
   const shownAt = useRef(0);
@@ -154,6 +156,7 @@ function Session({
       const next = pickNext(poolFor(getProgress(), set), session.recent);
       setRevealed(false);
       setHinted(false);
+      setEditingNotes(false);
       if (!next) return setSession(null);
       setSession({
         current: next,
@@ -250,12 +253,19 @@ function Session({
                   </Link>
                 </div>
                 <MoveSequence alg={main} className="text-[clamp(1.25rem,2.6vw,1.9rem)] leading-tight font-bold text-foreground" />
-                {notes && <Notes notes={notes} />}
+                {notes || editingNotes ? (
+                  <Notes id={alg.id} notes={entry.notes} editing={editingNotes} setEditing={setEditingNotes} />
+                ) : (
+                  <Button variant="ghost" size="sm" className="self-start text-muted-foreground" onClick={() => setEditingNotes(true)}>
+                    <PencilIcon data-icon="inline-start" />
+                    Add notes
+                  </Button>
+                )}
                 <StatusToggle id={alg.id} status={entry.status} size="default" className="max-w-md" />
               </div>
             ) : (
               <div className="flex flex-col gap-4">
-                {hinted && notes && <Notes notes={notes} />}
+                {hinted && (notes || editingNotes) && <Notes id={alg.id} notes={entry.notes} editing={editingNotes} setEditing={setEditingNotes} />}
                 <div className="flex gap-3">
                   {notes && !hinted && (
                     <Button variant="outline" size="lg" className="h-12 text-base font-semibold" onClick={() => setHinted(true)}>
@@ -294,13 +304,32 @@ function Session({
   );
 }
 
-function Notes({ notes }: { notes: string }) {
+function Notes({
+  id,
+  notes,
+  editing,
+  setEditing,
+}: {
+  id: string;
+  notes: string | undefined;
+  editing: boolean;
+  setEditing: (editing: boolean) => void;
+}) {
   return (
     <div className="animate-in rounded-lg bg-muted p-4 duration-200 fade-in-0">
-      <h3 className="mb-1 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
-        <LightbulbIcon className="size-4" aria-hidden /> Your notes
-      </h3>
-      <p className="whitespace-pre-wrap text-base leading-relaxed">{notes}</p>
+      <div className="mb-1 flex items-center justify-between gap-3">
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+          <LightbulbIcon className="size-4" aria-hidden /> Your notes
+        </h3>
+        <Button variant="ghost" size="sm" className="-my-1 text-muted-foreground" onClick={() => setEditing(!editing)}>
+          {editing ? "Done" : "Edit"}
+        </Button>
+      </div>
+      {editing ? (
+        <NotesField id={id} notes={notes} onDone={() => setEditing(false)} autoFocus className="bg-background dark:bg-background" />
+      ) : (
+        <p className="whitespace-pre-wrap text-base leading-relaxed">{notes?.trim()}</p>
+      )}
     </div>
   );
 }
