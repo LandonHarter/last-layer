@@ -1,26 +1,265 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@custom-variant dark (&:where([data-theme="blackout"], [data-theme="blackout"] *, [data-theme="speedstack"], [data-theme="speedstack"] *));
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-bricolage);
+  --font-mono: var(--font-jetbrains);
+  --font-heading: var(--font-bricolage);
+  --color-unknown: var(--unknown);
+  --color-learning: var(--learning);
+  --color-learning-foreground: var(--learning-foreground);
+  --color-learned: var(--learned);
+  --color-learned-foreground: var(--learned-foreground);
+  --color-missed: var(--missed);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* Each theme sets the shadcn tokens plus status colours and chart series
+   (--chart-1…4, checked with the dataviz palette validator against --card).
+   Sticker colours for previews live in src/lib/themes.ts. */
+:root,
+[data-theme="daylight"] {
+  color-scheme: light;
+  --background: #f6f7f9;
+  --foreground: #1a1d24;
+  --card: #ffffff;
+  --card-foreground: #1a1d24;
+  --popover: #ffffff;
+  --popover-foreground: #1a1d24;
+  --primary: #0046ad;
+  --primary-foreground: #ffffff;
+  --secondary: #e9ecf1;
+  --secondary-foreground: #1a1d24;
+  --muted: #eceef2;
+  --muted-foreground: #5b6270;
+  --accent: #e3e9f5;
+  --accent-foreground: #0b2a66;
+  --destructive: #c41e3a;
+  --border: #dde1e7;
+  --input: #d3d8e0;
+  --ring: #0046ad;
+  --radius: 0.5rem;
+  --unknown: #c3c8d1;
+  --learning: #ff8a00;
+  --learning-foreground: #2b1600;
+  --learned: #009b48;
+  --learned-foreground: #ffffff;
+  --missed: #c41e3a;
+  --chart-1: #1f5bd6;
+  --chart-2: #d9480f;
+  --chart-3: #0f9d8a;
+  --chart-4: #9c36b5;
+}
+
+[data-theme="blackout"] {
+  color-scheme: dark;
+  --background: #000000;
+  --foreground: #f2f2f2;
+  --card: #0d0d0e;
+  --card-foreground: #f2f2f2;
+  --popover: #121214;
+  --popover-foreground: #f2f2f2;
+  --primary: #ffd500;
+  --primary-foreground: #000000;
+  --secondary: #1b1b1e;
+  --secondary-foreground: #f2f2f2;
+  --muted: #17171a;
+  --muted-foreground: #9a9aa2;
+  --accent: #232327;
+  --accent-foreground: #ffffff;
+  --destructive: #ff4d5e;
+  --border: #25252a;
+  --input: #2e2e34;
+  --ring: #ffd500;
+  --radius: 0.5rem;
+  --unknown: #3a3a40;
+  --learning: #ff6a13;
+  --learning-foreground: #000000;
+  --learned: #00c864;
+  --learned-foreground: #000000;
+  --missed: #ff4d5e;
+  --chart-1: #4a7fe8;
+  --chart-2: #dc6a22;
+  --chart-3: #1fa898;
+  --chart-4: #b067e0;
+}
+
+[data-theme="stickerless"] {
+  color-scheme: light;
+  --background: #f3f0ff;
+  --foreground: #1c1238;
+  --card: #ffffff;
+  --card-foreground: #1c1238;
+  --popover: #ffffff;
+  --popover-foreground: #1c1238;
+  --primary: #e0126f;
+  --primary-foreground: #ffffff;
+  --secondary: #e6e0fb;
+  --secondary-foreground: #1c1238;
+  --muted: #ebe6fd;
+  --muted-foreground: #5d5382;
+  --accent: #fde3f0;
+  --accent-foreground: #7a0a3c;
+  --destructive: #d4145a;
+  --border: #ddd5f7;
+  --input: #cfc5f2;
+  --ring: #e0126f;
+  --radius: 0.9rem;
+  --unknown: #cfc6ee;
+  --learning: #ffb000;
+  --learning-foreground: #2d1a00;
+  --learned: #22b14c;
+  --learned-foreground: #ffffff;
+  --missed: #d4145a;
+  --chart-1: #6d28d9;
+  --chart-2: #e0126f;
+  --chart-3: #0a8fc4;
+  --chart-4: #c77700;
+}
+
+[data-theme="speedstack"] {
+  color-scheme: dark;
+  --background: #0b1a3a;
+  --foreground: #eaf0ff;
+  --card: #10244d;
+  --card-foreground: #eaf0ff;
+  --popover: #132a58;
+  --popover-foreground: #eaf0ff;
+  --primary: #ff3b3b;
+  --primary-foreground: #ffffff;
+  --secondary: #173265;
+  --secondary-foreground: #eaf0ff;
+  --muted: #142c5a;
+  --muted-foreground: #9fb1d9;
+  --accent: #1c3b78;
+  --accent-foreground: #ffffff;
+  --destructive: #ff5a5a;
+  --border: #1f3b73;
+  --input: #27488a;
+  --ring: #ffd23f;
+  --radius: 0.35rem;
+  --unknown: #2a4580;
+  --learning: #ffd23f;
+  --learning-foreground: #1a1300;
+  --learned: #2fd07a;
+  --learned-foreground: #04210f;
+  --missed: #ff5a5a;
+  --chart-1: #5b92f0;
+  --chart-2: #dc5a3c;
+  --chart-3: #1fa283;
+  --chart-4: #b06dd4;
+}
+
+[data-theme="chalk"] {
+  color-scheme: light;
+  --background: #e9eae8;
+  --foreground: #2a2c29;
+  --card: #f4f4f3;
+  --card-foreground: #2a2c29;
+  --popover: #f7f7f6;
+  --popover-foreground: #2a2c29;
+  --primary: #3f423e;
+  --primary-foreground: #f7f7f6;
+  --secondary: #dcdddb;
+  --secondary-foreground: #2a2c29;
+  --muted: #dfe0de;
+  --muted-foreground: #62655f;
+  --accent: #d6d7d4;
+  --accent-foreground: #2a2c29;
+  --destructive: #9e3b32;
+  --border: #d0d1ce;
+  --input: #c4c6c2;
+  --ring: #b58d00;
+  --radius: 0.25rem;
+  --unknown: #c4c6c2;
+  --learning: #e6b400;
+  --learning-foreground: #2a2000;
+  --learned: #3f423e;
+  --learned-foreground: #f7f7f6;
+  --missed: #9e3b32;
+  --chart-1: #3d6fb0;
+  --chart-2: #b36b00;
+  --chart-3: #1f9a7c;
+  --chart-4: #a8488f;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* Condensed, heavy digits for the solve clock (Bricolage's width axis). */
+@utility font-clock {
+  font-family: var(--font-bricolage);
+  font-weight: 800;
+  font-variation-settings: "wdth" 75, "opsz" 96;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* Theme switch: a circular wipe out from the chosen swatch. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+::view-transition-new(root) {
+  animation: theme-wipe 520ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+@keyframes theme-wipe {
+  from {
+    clip-path: circle(0 at var(--wipe-x, 50%) var(--wipe-y, 0%));
+  }
+  to {
+    clip-path: circle(150vmax at var(--wipe-x, 50%) var(--wipe-y, 0%));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-new(root) {
+    animation: none;
+  }
 }
