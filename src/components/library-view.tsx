@@ -1,6 +1,7 @@
 "use client";
 
-import { useDeferredValue, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { SearchIcon, XIcon } from "lucide-react";
 import { ALGS, GROUPS, SET_TITLES, SETS, type Alg, type AlgSet } from "@/data/algs";
 import { AlgCard } from "@/components/algs/alg-card";
@@ -48,13 +49,52 @@ function makeMatcher(query: string): (alg: Alg) => boolean {
     a.algs.some((alg) => alg.includes(raw));
 }
 
-export function LibraryView() {
+type Filters = { query: string; set: SetFilter; status: StatusFilter; group: string };
+
+const DEFAULT_FILTERS: Filters = { query: "", set: "all", status: "all", group: "all" };
+
+/** Filters from the URL (`?q=&set=&status=&shape=`), ignoring values that don't exist. */
+function readFilters(params: URLSearchParams): Filters {
+  const set = SETS.find((s) => s === params.get("set")) ?? "all";
+  const status = (Object.keys(STATUS_LABELS) as Status[]).find((s) => s === params.get("status")) ?? "all";
+  const shape = params.get("shape") ?? "";
+  const [shapeSet, shapeGroup] = shape.split(/:(.*)/);
+  const validShape =
+    SETS.some((s) => s === shapeSet && (set === "all" || set === s) && GROUPS[s].includes(shapeGroup ?? ""));
+  return { query: params.get("q") ?? "", set, status, group: validShape ? shape : "all" };
+}
+
+function writeFilters({ query, set, status, group }: Filters) {
+  const params = new URLSearchParams();
+  if (query) params.set("q", query);
+  if (set !== "all") params.set("set", set);
+  if (status !== "all") params.set("status", status);
+  if (group !== "all") params.set("shape", group);
+  const search = params.toString();
+  const url = `${window.location.pathname}${search ? `?${search}` : ""}${window.location.hash}`;
+  if (url !== `${window.location.pathname}${window.location.search}${window.location.hash}`) {
+    // Replace, not push, so Back leaves the Library instead of stepping through filters.
+    window.history.replaceState(window.history.state, "", url);
+  }
+}
+
+/** The Library with its filters kept in the URL, so they survive a refresh or going back. */
+export function LibraryFromUrl() {
+  const params = useSearchParams();
+  return <LibraryView initial={readFilters(new URLSearchParams(params.toString()))} syncUrl />;
+}
+
+export function LibraryView({ initial = DEFAULT_FILTERS, syncUrl = false }: { initial?: Filters; syncUrl?: boolean }) {
   const progress = useProgress();
-  const [query, setQuery] = useState("");
-  const [set, setSet] = useState<SetFilter>("all");
-  const [status, setStatusFilter] = useState<StatusFilter>("all");
-  const [group, setGroup] = useState("all");
+  const [query, setQuery] = useState(initial.query);
+  const [set, setSet] = useState<SetFilter>(initial.set);
+  const [status, setStatusFilter] = useState<StatusFilter>(initial.status);
+  const [group, setGroup] = useState(initial.group);
   const deferredQuery = useDeferredValue(query);
+
+  useEffect(() => {
+    if (syncUrl) writeFilters({ query: deferredQuery, set, status, group });
+  }, [syncUrl, deferredQuery, set, status, group]);
 
   const groupItems = useMemo(() => {
     const sets: AlgSet[] = set === "all" ? SETS : [set];

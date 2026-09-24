@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowRightIcon, CheckIcon, EyeIcon, LightbulbIcon, RefreshCwIcon, RotateCcwIcon } from "lucide-react";
+import { ArrowRightIcon, CheckIcon, EyeIcon, LightbulbIcon, RefreshCwIcon, RotateCcwIcon, SkipForwardIcon } from "lucide-react";
 import { toast } from "sonner";
 import { ALGS, ALGS_BY_ID, SETS, type Alg, type AlgSet } from "@/data/algs";
 import { CaseImage } from "@/components/algs/case-image";
@@ -141,7 +141,8 @@ export function LearnView() {
           <p className="mt-1 max-w-prose text-sm text-muted-foreground">
             Cases that look alike or share moves are grouped, so you learn to tell them apart and reuse what your hands
             know. Mirror pairs stay together. Cases you&apos;ve marked Learned are left out, and if you already know one
-            in a batch, mark it Learned while you work and it drops out. Start with any batch.
+            in a batch, mark it Learned while you work and it drops out. Skip for now takes one out without marking it, and it
+            comes back here. Start with any batch.
           </p>
         </div>
         {plan.length === 0 ? (
@@ -205,20 +206,29 @@ function StreakDots({ streak, className }: { streak: number; className?: string 
   );
 }
 
-function BatchStrip({ batch, data, current }: { batch: string[]; data: LearnData; current?: string }) {
+/** The cases in a batch. With `onSelect`, each one is a button that opens it. */
+function BatchStrip({
+  batch,
+  data,
+  current,
+  onSelect,
+}: {
+  batch: string[];
+  data: LearnData;
+  current?: string;
+  onSelect?: (id: string) => void;
+}) {
   return (
     <ul className="grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-2">
       {batch.map((id) => {
         const alg = ALGS_BY_ID.get(id)!;
         const c = learnCase(data, id);
-        return (
-          <li
-            key={id}
-            className={cn(
-              "flex items-center gap-2 rounded-lg border border-transparent bg-muted p-2",
-              current === id && "border-foreground/40",
-            )}
-          >
+        const cls = cn(
+          "flex w-full items-center gap-2 rounded-lg border border-transparent bg-muted p-2 text-left",
+          current === id && "border-foreground/40",
+        );
+        const content = (
+          <>
             <CaseImage alg={alg} className="size-9 shrink-0" />
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold">{alg.name}</p>
@@ -227,6 +237,26 @@ function BatchStrip({ batch, data, current }: { batch: string[]; data: LearnData
                 <span className="truncate">{stageLabel(data, id)}</span>
               </p>
             </div>
+          </>
+        );
+        return (
+          <li key={id}>
+            {onSelect ? (
+              <button
+                type="button"
+                className={cn(cls, "transition-colors hover:bg-muted/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring")}
+                aria-current={current === id ? "step" : undefined}
+                onClick={(e) => {
+                  // Let go of focus after a mouse click so Space and the other shortcuts reach the step.
+                  if (e.detail > 0) e.currentTarget.blur();
+                  onSelect(id);
+                }}
+              >
+                {content}
+              </button>
+            ) : (
+              <div className={cls}>{content}</div>
+            )}
           </li>
         );
       })}
@@ -237,33 +267,66 @@ function BatchStrip({ batch, data, current }: { batch: string[]; data: LearnData
 // ---------------------------------------------------------------------------
 // Session
 
-/** The cases in a batch you haven't marked Learned. */
-const stillToLearn = (batch: string[], progress: Progress) => batch.filter((id) => entryFor(progress, id).status !== "learned");
+/** The cases in a batch you haven't marked Learned or skipped. */
+const stillToLearn = (batch: string[], progress: Progress, data: LearnData) => {
+  const stored = data.batch[data.set];
+  return batch.filter((id) => entryFor(progress, id).status !== "learned" && (!stored || stored.includes(id)));
+};
+
+/** Take a case out of your batch without marking it Learned. It comes back in the suggested batches. */
+function skipCase(id: string) {
+  updateLearn((d) => ({ ...d, batch: { ...d.batch, [d.set]: d.batch[d.set]?.filter((b) => b !== id) } }));
+}
+
+/** The task for opening a case yourself: recall once it's been studied, otherwise learn it. */
+const taskFor = (data: LearnData, id: string): Task => ({ kind: learnCase(data, id).stage === "recall" ? "recall" : "learn", id });
 
 function Session({ batch, onExit }: { batch: string[]; onExit: () => void }) {
   const data = useLearn();
   const progress = useProgress();
-  const live = stillToLearn(batch, progress);
+  const live = stillToLearn(batch, progress, data);
   const [last, setLast] = useState<string | null>(null);
   // Counts steps, so the same case twice in a row still starts fresh.
   const [round, setRound] = useState(0);
-  const [task, setTask] = useState<Task>(() => nextTask(stillToLearn(batch, getProgress()), getLearn(), null));
+  const [task, setTask] = useState<Task>(() => nextTask(stillToLearn(batch, getProgress(), getLearn()), getLearn(), null));
   const [finished, setFinished] = useState<string[] | null>(null);
 
   const advance = useCallback(
     (id: string | null) => {
       if (id) setLast(id);
       setRound((r) => r + 1);
-      const remaining = stillToLearn(batch, getProgress());
+      const remaining = stillToLearn(batch, getProgress(), getLearn());
       const next = nextTask(remaining, getLearn(), id);
       if (next.kind === "done") {
+        // Skipped cases aren't part of what you learned.
+        const kept = batch.filter((b) => remaining.includes(b) || entryFor(getProgress(), b).status === "learned");
         for (const b of remaining) setStatus(b, "learned");
         updateLearn((d) => ({ ...d, batch: { ...d.batch, [d.set]: undefined } }));
-        setFinished(batch);
+        if (!kept.length) return onExit();
+        setFinished(kept);
       }
       setTask(next);
     },
-    [batch],
+    [batch, onExit],
+  );
+
+  const open = useCallback((id: string) => {
+    if (task.kind !== "done" && task.id === id) return;
+    setRound((r) => r + 1);
+    setTask(taskFor(getLearn(), id));
+  }, [task]);
+
+  const skip = useCallback(
+    (id: string) => {
+      const alg = ALGS_BY_ID.get(id)!;
+      const before = getLearn().batch[getLearn().set];
+      skipCase(id);
+      toast(`Skipped ${alg.name}`, {
+        description: "It's out of this batch but not Learned. It comes back in the suggested batches.",
+        action: before ? { label: "Undo", onClick: () => updateLearn((d) => ({ ...d, batch: { ...d.batch, [d.set]: before } })) } : undefined,
+      });
+    },
+    [],
   );
 
   // Marking the case in front of you Learned takes it out of the batch.
@@ -285,13 +348,25 @@ function Session({ batch, onExit }: { batch: string[]; onExit: () => void }) {
           {last === null && task.kind === "learn" && ": start with this one"}
         </p>
       </div>
-      <BatchStrip batch={live} data={data} current={current} />
-      {task.kind !== "done" && !dropped && <Step key={round} task={task} data={data} batch={live} onNext={advance} />}
+      <BatchStrip batch={live} data={data} current={current} onSelect={open} />
+      {task.kind !== "done" && !dropped && <Step key={round} task={task} data={data} batch={live} onNext={advance} onSkip={skip} />}
     </div>
   );
 }
 
-function Step({ task, data, batch, onNext }: { task: Exclude<Task, { kind: "done" }>; data: LearnData; batch: string[]; onNext: (id: string) => void }) {
+function Step({
+  task,
+  data,
+  batch,
+  onNext,
+  onSkip,
+}: {
+  task: Exclude<Task, { kind: "done" }>;
+  data: LearnData;
+  batch: string[];
+  onNext: (id: string) => void;
+  onSkip: (id: string) => void;
+}) {
   const alg = ALGS_BY_ID.get(task.id)!;
   const progress = useProgress();
   const stage = learnCase(data, alg.id).stage;
@@ -317,6 +392,10 @@ function Step({ task, data, batch, onNext }: { task: Exclude<Task, { kind: "done
           status={entry.status}
           onChange={(s) => s === "learned" && toast(`${alg.name} is Learned`, { description: "It's out of this batch and will come up in Drill." })}
         />
+        <Button variant="ghost" size="sm" className="self-center text-muted-foreground" onClick={() => onSkip(alg.id)}>
+          <SkipForwardIcon data-icon="inline-start" />
+          Skip for now
+        </Button>
         {stage !== "pick" && <MainPicker alg={alg} main={main} options={allAlgs(alg, entry)} />}
         <div className="flex flex-col gap-1.5">
           <span className="text-xs font-semibold text-muted-foreground">Your notes</span>

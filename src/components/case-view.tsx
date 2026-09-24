@@ -80,6 +80,7 @@ export function CaseView({ id }: { id: string }) {
             <MoveSequence
               key={main}
               alg={main}
+              grouped="labeled"
               className="animate-in text-[clamp(1.4rem,3vw,2.2rem)] leading-tight font-bold duration-200 fade-in-0"
             />
           </section>
@@ -203,7 +204,7 @@ function AlgOption({
             selected ? "bg-primary ring-primary" : "ring-foreground/25",
           )}
         />
-        <MoveSequence alg={alg} className={cn("min-w-0 flex-1 text-[0.95rem] leading-snug", selected && "font-bold")} />
+        <MoveSequence alg={alg} grouped className={cn("min-w-0 flex-1 text-[0.95rem] leading-snug", selected && "font-bold")} />
         <span className="flex shrink-0 flex-col items-end text-xs text-muted-foreground sm:flex-row sm:gap-3">
           {isCustom && <span className="font-semibold text-foreground">Yours</span>}
           {isDefault && !isCustom && <span>Default</span>}
