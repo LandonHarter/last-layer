@@ -144,6 +144,8 @@ export type DrillAttempt = {
   ms: number;
   /** Whether the algorithm was revealed before answering. */
   revealed: boolean;
+  /** Whether your notes were shown as a hint before answering. */
+  hinted?: boolean;
   at: number;
 };
 

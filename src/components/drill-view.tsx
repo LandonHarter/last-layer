@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { RefreshCwIcon } from "lucide-react";
+import { LightbulbIcon, RefreshCwIcon } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { ALGS, ALGS_BY_ID, SETS, type AlgSet } from "@/data/algs";
@@ -127,6 +127,7 @@ function Session({
   progress: Progress;
 }) {
   const [revealed, setRevealed] = useState(false);
+  const [hinted, setHinted] = useState(false);
   const alg = ALGS_BY_ID.get(session.current)!;
   // When this case appeared, for the answer time in Analyze.
   const shownAt = useRef(0);
@@ -135,6 +136,7 @@ function Session({
   }, [session.current, session.done]);
   const entry = entryFor(progress, alg.id);
   const main = mainAlg(alg, entry);
+  const notes = entry.notes?.trim();
   const allCount = alg.algs.length + (entry.custom?.length ?? 0);
   const reroll = useCallback(() => setSession({ ...session, setup: setupFor(alg.id) }), [alg.id, session, setSession]);
 
@@ -142,7 +144,7 @@ function Session({
     (success: boolean) => {
       const wasLearned = entryFor(getProgress(), alg.id).status === "learned";
       recordAttempt(alg.id, success);
-      logDrillAttempt({ id: alg.id, ok: success, ms: Math.round(performance.now() - shownAt.current), revealed, at: Date.now() });
+      logDrillAttempt({ id: alg.id, ok: success, ms: Math.round(performance.now() - shownAt.current), revealed, hinted, at: Date.now() });
       if (!success && wasLearned) {
         toast(`Missed ${alg.name}`, {
           description: "It's marked Learned. Move it back to get more practice?",
@@ -151,6 +153,7 @@ function Session({
       }
       const next = pickNext(poolFor(getProgress(), set), session.recent);
       setRevealed(false);
+      setHinted(false);
       if (!next) return setSession(null);
       setSession({
         current: next,
@@ -160,7 +163,7 @@ function Session({
         missed: session.missed + (success ? 0 : 1),
       });
     },
-    [alg, revealed, session, set, setSession],
+    [alg, revealed, hinted, session, set, setSession],
   );
 
   useEffect(() => {
@@ -176,6 +179,8 @@ function Session({
         answer(false);
       } else if (e.key === "k" || e.key === "ArrowRight") {
         answer(true);
+      } else if (e.key === "h") {
+        if (notes) setHinted(true);
       } else if (e.key === "n") {
         reroll();
       } else if (e.key === "Escape") {
@@ -184,7 +189,7 @@ function Session({
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [answer, reroll, setSession]);
+  }, [answer, notes, reroll, setSession]);
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6 sm:px-6 md:py-10">
@@ -245,12 +250,24 @@ function Session({
                   </Link>
                 </div>
                 <MoveSequence alg={main} className="text-[clamp(1.25rem,2.6vw,1.9rem)] leading-tight font-bold text-foreground" />
+                {notes && <Notes notes={notes} />}
                 <StatusToggle id={alg.id} status={entry.status} size="default" className="max-w-md" />
               </div>
             ) : (
-              <Button variant="secondary" size="lg" className="h-12 w-full text-base font-semibold" onClick={() => setRevealed(true)}>
-                Reveal algorithm <Kbd className="ml-1 hidden sm:inline-flex">Space</Kbd>
-              </Button>
+              <div className="flex flex-col gap-4">
+                {hinted && notes && <Notes notes={notes} />}
+                <div className="flex gap-3">
+                  {notes && !hinted && (
+                    <Button variant="outline" size="lg" className="h-12 text-base font-semibold" onClick={() => setHinted(true)}>
+                      <LightbulbIcon data-icon="inline-start" />
+                      Hint <Kbd className="ml-1 hidden sm:inline-flex">H</Kbd>
+                    </Button>
+                  )}
+                  <Button variant="secondary" size="lg" className="h-12 flex-1 text-base font-semibold" onClick={() => setRevealed(true)}>
+                    Reveal algorithm <Kbd className="ml-1 hidden sm:inline-flex">Space</Kbd>
+                  </Button>
+                </div>
+              </div>
             )}
           </section>
 
@@ -273,6 +290,17 @@ function Session({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function Notes({ notes }: { notes: string }) {
+  return (
+    <div className="animate-in rounded-lg bg-muted p-4 duration-200 fade-in-0">
+      <h3 className="mb-1 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+        <LightbulbIcon className="size-4" aria-hidden /> Your notes
+      </h3>
+      <p className="whitespace-pre-wrap text-base leading-relaxed">{notes}</p>
     </div>
   );
 }

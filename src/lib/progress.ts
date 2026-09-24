@@ -21,6 +21,8 @@ export type Entry = {
   main?: string;
   /** Algorithms you added yourself. */
   custom?: string[];
+  /** Your own notes for the case, shown as a hint in Drill. */
+  notes?: string;
 };
 
 export type Progress = Record<string, Entry>;
@@ -94,6 +96,10 @@ export function removeCustom(id: string, alg: string) {
     custom: (e.custom ?? []).filter((a) => a !== alg),
     main: e.main === alg ? undefined : e.main,
   }));
+}
+
+export function setNotes(id: string, notes: string) {
+  update(id, (e) => ({ ...e, notes: notes || undefined }));
 }
 
 /** Every algorithm for a case: yours first, then the built-in list. */

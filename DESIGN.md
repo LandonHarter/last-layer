@@ -54,8 +54,8 @@ Sticker palettes for the picker previews live in `src/lib/themes.ts`, because th
   - Keyboard: Space next chunk or Show me, K Got it, N new setup.
 - **Drill (`/drill`):**
   - Idle: counts of In progress and Learned cases, plus a Start button. With nothing to drill, it shows a message and a link to the Library.
-  - Session: case image on the left (5fr), work column on the right (7fr). The work column holds setup moves with a New setup button, then the Reveal card (name, group, your algorithm, link to all algorithms, status toggle), then Missed and Got it buttons. Setups are random and never just undo your algorithm. On mobile this stacks, with a smaller image so the buttons stay reachable.
-  - Keyboard: Space reveals, J/← is Missed, K/→ is Got it, N gives a new setup, Esc ends the session.
+  - Session: case image on the left (5fr), work column on the right (7fr). The work column holds setup moves with a New setup button, then the Reveal card (a Hint button that shows your notes, if the case has any; after Reveal: name, group, your algorithm, your notes, link to all algorithms, status toggle), then Missed and Got it buttons. Setups are random and never just undo your algorithm. On mobile this stacks, with a smaller image so the buttons stay reachable.
+  - Keyboard: Space reveals, H shows the hint, J/← is Missed, K/→ is Got it, N gives a new setup, Esc ends the session.
 - **Timer (`/timer`):**
   - Main column: the scramble in mono at the top with the session select, New scramble and Settings; the clock in the middle; ao5 and ao12 under it; penalty (OK / +2 / DNF) and Delete for the last solve, then optional OLL and PLL ghost buttons that tag it with the case you had (a popover with search and one row per case: image, name, your main algorithm in muted mono). The unfolded scramble (white top, green front, in the theme's sticker colors) sits bottom-left.
   - Sidebar (right on desktop, below on mobile): current and best single, mo3, ao5, ao12, ao50, ao100 and mean, then the solve list (latest 200). A row opens its scramble, date, OLL/PLL tags and penalty controls.
@@ -72,7 +72,7 @@ Sticker palettes for the picker previews live in `src/lib/themes.ts`, because th
   - Charts are hand-built SVG in `analyze/charts.tsx`: 2px lines, dots with a surface ring, columns at most 24px with a rounded top, hairline gridlines, a crosshair tooltip, and arrow keys to step through values.
 - **Case (`/algs/[id]`):**
   - Top: breadcrumb (Library / set / group) and previous/next case links.
-  - Case image on the left (sticky on desktop). On the right: name, group, status toggle, your algorithm in large bold mono, and a practice setup card.
+  - Case image on the left (sticky on desktop). On the right: name, group, status toggle, your algorithm in large bold mono, a Your notes textarea (saved as you type, shown as the Drill hint), and a practice setup card.
   - Algorithms: a radio list, one row per algorithm, with move count and "Default" or "Yours" tags. A filled square sticker (primary color) marks your main, echoing the progress board. Your own algorithms have Remove.
   - Add your own: a mono input. The algorithm is checked on the simulator. If it needs a turn of the top first, it is stored with that turn, and a toast says so.
 
