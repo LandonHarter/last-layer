@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Grid3x3Icon, TimerIcon } from "lucide-react";
+import { BackupMenu } from "@/components/backup-menu";
 import { ThemeSelector } from "@/components/theme-selector";
 import { MODE_HOME, modeForPath, setStoredMode, useStoredMode, type Mode } from "@/lib/mode";
 import { cn } from "@/lib/utils";
@@ -11,6 +12,7 @@ import { cn } from "@/lib/utils";
 const NAV: Record<Mode, { href: string; label: string }[]> = {
   algs: [
     { href: "/", label: "Library" },
+    { href: "/learn", label: "Learn" },
     { href: "/drill", label: "Drill" },
     { href: "/analyze", label: "Analyze" },
   ],
@@ -45,7 +47,7 @@ export function SiteHeader() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-background/85 backdrop-blur transition-opacity duration-200 in-data-timing:pointer-events-none in-data-timing:opacity-0">
-      <div className="mx-auto flex h-14 max-w-7xl items-center gap-2 px-4 sm:gap-4 sm:px-6">
+      <div className="mx-auto flex h-14 max-w-7xl items-center gap-1.5 px-3 sm:gap-4 sm:px-6">
         <Link href={MODE_HOME[mode]} className="mr-1 hidden text-lg font-extrabold tracking-tight sm:block">
           Last Layer
         </Link>
@@ -59,7 +61,7 @@ export function SiteHeader() {
               aria-label={label}
               onClick={() => choose(id)}
               className={cn(
-                "flex h-7 items-center gap-1.5 rounded-md px-2 text-sm font-semibold transition-colors",
+                "flex h-7 items-center gap-1.5 rounded-md px-1.5 text-sm font-semibold transition-colors",
                 mode === id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
               )}
             >
@@ -78,7 +80,7 @@ export function SiteHeader() {
                 href={item.href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "rounded-md px-2 py-1.5 text-sm font-medium transition-colors sm:px-3",
+                  "rounded-md px-1.5 py-1.5 text-[0.8125rem] font-medium transition-colors sm:px-3 sm:text-sm",
                   active ? "bg-foreground text-background" : "text-muted-foreground hover:bg-muted hover:text-foreground",
                 )}
               >
@@ -87,7 +89,8 @@ export function SiteHeader() {
             );
           })}
         </nav>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
+          <BackupMenu />
           <ThemeSelector />
         </div>
       </div>

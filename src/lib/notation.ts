@@ -95,3 +95,71 @@ export function mirrorAlg(alg: string, plane: "M" | "FR"): string {
     }),
   );
 }
+
+// A wide, slice or rotation move as face turns plus a whole-cube rotation:
+// r = L x, M = R L' x', and so on. Face turns are listed for one clockwise turn.
+const AS_FACES: Record<string, { faces: [string, 1 | 3][]; rotation?: string }> = {
+  r: { faces: [["L", 1]], rotation: "x" },
+  l: { faces: [["R", 1]], rotation: "x'" },
+  u: { faces: [["D", 1]], rotation: "y" },
+  d: { faces: [["U", 1]], rotation: "y'" },
+  f: { faces: [["B", 1]], rotation: "z" },
+  b: { faces: [["F", 1]], rotation: "z'" },
+  M: { faces: [["R", 1], ["L", 3]], rotation: "x'" },
+  E: { faces: [["U", 1], ["D", 3]], rotation: "y'" },
+  S: { faces: [["F", 3], ["B", 1]], rotation: "z" },
+  x: { faces: [], rotation: "x" },
+  y: { faces: [], rotation: "y" },
+  z: { faces: [], rotation: "z" },
+};
+
+// After one clockwise rotation, the face that moves into each position.
+const ROTATION_FROM: Record<"x" | "y" | "z", Record<string, string>> = {
+  x: { U: "F", F: "D", D: "B", B: "U", R: "R", L: "L" },
+  y: { F: "R", R: "B", B: "L", L: "F", U: "U", D: "D" },
+  z: { U: "L", R: "U", D: "R", L: "D", F: "F", B: "B" },
+};
+
+const OPPOSITE: Record<string, string> = { R: "L", L: "R", U: "D", D: "U", F: "B", B: "F" };
+
+/**
+ * The same alg with only outer face turns (R U F …), for someone holding the
+ * cube still: wide and slice moves and rotations become face turns on the
+ * faces they now point at. Turns that cancel are merged, including across a
+ * turn of the opposite face (R L R' → L).
+ */
+export function faceTurnsOnly(alg: string): string {
+  // Where each face of the held cube has gone after the rotations so far.
+  let frame: Record<string, string> = { R: "R", L: "L", U: "U", D: "D", F: "F", B: "B" };
+  const out: Move[] = [];
+  const push = (base: string, turns: number) => {
+    turns %= 4;
+    if (!turns) return;
+    let i = out.length - 1;
+    if (i >= 0 && out[i].base !== base && out[i].base === OPPOSITE[base]) i--;
+    if (i >= 0 && out[i].base === base) {
+      const sum = (out[i].turns + turns) % 4;
+      if (sum === 0) out.splice(i, 1);
+      else out[i].turns = sum as 1 | 2 | 3;
+    } else {
+      out.push({ base, turns: turns as 1 | 2 | 3 });
+    }
+  };
+  for (const { base, turns } of parseAlg(alg)) {
+    const key = base.endsWith("w") ? base[0].toLowerCase() : base;
+    const def = AS_FACES[key];
+    if (!def) {
+      push(frame[key], turns);
+      continue;
+    }
+    for (const [face, dir] of def.faces) push(frame[face], dir * turns);
+    if (!def.rotation) continue;
+    const axis = def.rotation[0] as "x" | "y" | "z";
+    const quarters = ((def.rotation.endsWith("'") ? 3 : 1) * turns) % 4;
+    for (let q = 0; q < quarters; q++) {
+      const from = ROTATION_FROM[axis];
+      frame = Object.fromEntries(Object.keys(frame).map((f) => [f, frame[from[f]]]));
+    }
+  }
+  return formatAlg(out);
+}

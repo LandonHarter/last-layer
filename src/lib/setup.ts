@@ -1,7 +1,7 @@
 import { ALGS, type Alg } from "@/data/algs";
 import { applyAlg, solvedCube, type Sticker } from "./cube";
 import { AUFS, setupWorks } from "./cases";
-import { invertAlg, moveCount, simplifyAlg } from "./notation";
+import { faceTurnsOnly, invertAlg, moveCount, parseAlg, simplifyAlg } from "./notation";
 
 type Random = () => number;
 
@@ -14,6 +14,9 @@ function otherAlg(target: Alg, main: string, random: Random): string {
   const others = target.algs.filter((a) => a !== main);
   return pick(others.length ? others : target.algs, random);
 }
+
+// Outer face turns only: no wide or slice moves, no rotations.
+const faceOnly = (alg: string) => parseAlg(alg).every((m) => /^[RLUDFB]$/.test(m.base));
 
 const fingerprint = (state: Sticker[]) => state.map((s) => `${s.pos}${s.normal}`).join("|");
 
@@ -31,7 +34,7 @@ function pllFromPair(target: Alg, main: string, random: Random): string | null {
     const first = invertAlg(pick(pick(others, random).algs, random));
     const second = invertAlg(pick(pick(others, random).algs, random));
     const setup = `${pick(AUFS, random)} ${first} ${pick(AUFS, random)} ${second} ${pick(AUFS, random)}`;
-    if (goals.has(fingerprint(applyAlg(solvedCube(), setup)))) hits.push(simplifyAlg(setup));
+    if (goals.has(fingerprint(applyAlg(solvedCube(), setup)))) hits.push(faceTurnsOnly(setup));
   }
   // Keep the shortest of the few found.
   return hits.sort((a, b) => moveCount(a) - moveCount(b))[0] ?? null;
@@ -39,7 +42,8 @@ function pllFromPair(target: Alg, main: string, random: Random): string | null {
 
 /**
  * Moves that set up `target` from a solved cube, for someone who solves it
- * with `main`. Every setup is checked with the simulator.
+ * with `main`. Setups use face turns only (no wide or slice moves or
+ * rotations), and every one is checked with the simulator.
  *
  * - F2L: a random last-layer algorithm scrambles the top, then an alternative
  *   for the case is undone.
@@ -61,9 +65,9 @@ export function makeSetup(target: Alg, main: string, random: Random = Math.rando
     for (let i = 0; i < 5; i++) {
       const raw = attempt();
       if (!raw) break;
-      const setup = simplifyAlg(raw);
-      if (setup && setupWorks(target.set, setup, main)) return setup;
+      const setup = faceTurnsOnly(raw);
+      if (setup && faceOnly(setup) && setupWorks(target.set, setup, main)) return setup;
     }
   }
-  return simplifyAlg(invertAlg(main));
+  return faceTurnsOnly(invertAlg(main));
 }

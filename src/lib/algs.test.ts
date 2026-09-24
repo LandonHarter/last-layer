@@ -11,7 +11,7 @@ import {
   topOriented,
   topStickerMoves,
 } from "./cube";
-import { invertAlg, mirrorAlg, parseAlg, simplifyAlg } from "./notation";
+import { faceTurnsOnly, invertAlg, mirrorAlg, parseAlg, simplifyAlg } from "./notation";
 import { makeSetup } from "./setup";
 
 const cases = ALGS.map((a) => [a.id, a] as const);
@@ -95,18 +95,34 @@ describe("algorithm data", () => {
   });
 });
 
+describe("face turns only", () => {
+  const all = ALGS.flatMap((a) => a.algs.map((alg) => [a.id, alg] as const));
+  test.each(all)("%s: %s gives the same cube with face turns", (_id, alg) => {
+    const faces = faceTurnsOnly(alg);
+    expect(parseAlg(faces).every((m) => /^[RLUDFB]$/.test(m.base))).toBe(true);
+    expect(applyAlg(solvedCube(), faces)).toEqual(normalizeOrientation(applyAlg(solvedCube(), alg)));
+  });
+
+  test("rewrites wide, slice and rotation moves", () => {
+    expect(faceTurnsOnly("r U r'")).toBe("L F L'");
+    expect(faceTurnsOnly("M2 U M2")).toBe("R2 L2 D R2 L2");
+    expect(faceTurnsOnly("R L R'")).toBe("L");
+  });
+});
+
 describe("drill setups", () => {
   test.each(cases)("%s: setups work with every algorithm", (_id, a) => {
     for (const main of a.algs.slice(0, 4)) {
       const setup = makeSetup(a, main);
       expect(setupWorks(a.set, setup, main)).toBe(true);
+      expect(parseAlg(setup).every((m) => /^[RLUDFB]$/.test(m.base))).toBe(true);
     }
   });
 
   test("setups are not the plain inverse of the main", () => {
     for (const a of ALGS) {
       if (a.algs.length < 2) continue;
-      expect(makeSetup(a, a.algs[0])).not.toBe(simplifyAlg(invertAlg(a.algs[0])));
+      expect(makeSetup(a, a.algs[0])).not.toBe(faceTurnsOnly(invertAlg(a.algs[0])));
     }
   });
 });

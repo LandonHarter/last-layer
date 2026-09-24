@@ -41,12 +41,17 @@ Sticker palettes for the picker previews live in `src/lib/themes.ts`, because th
 
 ## Layout
 
-- **Header:** sticky. Holds the wordmark (hidden below `sm`), the Algorithms/Timer mode switch (active filled with primary; icons only below `md`), that mode's nav (Library, Drill, Analyze or Timer, Analyze; active filled with foreground), and the theme button. Opening a page of one mode switches to it; Analyze follows the last mode. While the timer runs, the header fades out (`data-timing` on `<html>`).
+- **Header:** sticky. Holds the wordmark (hidden below `sm`), the Algorithms/Timer mode switch (active filled with primary; icons only below `md`), that mode's nav (Library, Learn, Drill, Analyze or Timer, Analyze; active filled with foreground), the backup button (a popover to save all data to a file or load one, which replaces this browser's data after a confirm), and the theme button. Below `sm` the nav text and gaps shrink so it fits at 375px. Opening a page of one mode switches to it; Analyze follows the last mode. While the timer runs, the header fades out (`data-timing` on `<html>`).
 - **Library (`/`):**
   - Hero: headline and short explainer on the left, progress board on the right. Every set is 3 rows at the same square size: OLL 19 wide, F2L 14 (41 cases leave one gap), PLL 7.
   - Filter bar: full width and sticky under the header. Contains search, an All/F2L/OLL/PLL toggle, a status select, and a shape select.
   - Content: sections per set, then per shape group. Cards sit in an auto-fill grid (min 12.5rem). On mobile, cards switch to horizontal rows with the image on the left.
   - Card: case image on a muted tile, name (links to the case page), drill score, your main algorithm in mono, a link to the other algorithms, and a three-way status toggle.
+- **Learn (`/learn`):**
+  - Overview: set toggle, cases per batch (3 to 6), learned count, your current batch (cases with stage or streak dots, Continue, Stop this batch), then suggested batches, each with case chips, why they belong together, and Start.
+  - Session: batch strip on top, case image on the left (4fr) with the status toggle and (after Pick) a Your algorithm select under it, the step on the right (8fr). Switching algorithm sends the case back to Study. Cases marked Learned, here or in the Library, drop out of the batch; Pick also has Mark it Learned and skip it. Steps: Pick (every algorithm as chunks with tags, Try it shows a setup, Make it yours, Learn this one), Study (setup, then chunks one at a time with the current one in primary, then From memory with blanks you can tap to peek, plus tips), Recall (setup, Show me or Got it, streak dots).
+  - A case is solid after 3 clean recalls in a row. A new case comes in only when fewer than two are shaky and each has one clean recall. A finished batch is marked Learned.
+  - Keyboard: Space next chunk or Show me, K Got it, N new setup.
 - **Drill (`/drill`):**
   - Idle: counts of In progress and Learned cases, plus a Start button. With nothing to drill, it shows a message and a link to the Library.
   - Session: case image on the left (5fr), work column on the right (7fr). The work column holds setup moves with a New setup button, then the Reveal card (name, group, your algorithm, link to all algorithms, status toggle), then Missed and Got it buttons. Setups are random and never just undo your algorithm. On mobile this stacks, with a smaller image so the buttons stay reachable.
@@ -63,7 +68,7 @@ Sticker palettes for the picker previews live in `src/lib/themes.ts`, because th
   - Distribution: histogram with a normal or log-normal curve, and a Q-Q plot.
   - Tests: Shapiro-Wilk normality, trend regression, Welch comparison of two groups, and chances of beating a time (bootstrapped for ao5 and ao12). Each ends in a plain sentence.
   - By group: mean (or Got it share) per session, time of day, weekday, month, set, case and so on, with interval whiskers.
-  - Tables: all solves with CSV export and JSON backup/import, or all cases sorted by most missed.
+  - Tables: all solves with CSV export and JSON export/import of solves (import merges, and also reads a full backup), or all cases sorted by most missed.
   - Charts are hand-built SVG in `analyze/charts.tsx`: 2px lines, dots with a surface ring, columns at most 24px with a rounded top, hairline gridlines, a crosshair tooltip, and arrow keys to step through values.
 - **Case (`/algs/[id]`):**
   - Top: breadcrumb (Library / set / group) and previous/next case links.
@@ -78,7 +83,8 @@ shadcn (base-nova style, Base UI primitives) in `src/components/ui`. App pieces:
 - `cube-art.tsx`: `IsoCube` (isometric 3-face SVG) and `FlatFace` (3x3 button icon)
 - `theme-selector.tsx`: popover picker with the switch animation
 - `algs/`: `CaseImage`, `MoveSequence`, `StatusToggle`, `AlgCard`
-- `library-view.tsx`, `drill-view.tsx`: page bodies
+- `library-view.tsx`, `learn-view.tsx`, `drill-view.tsx`: page bodies
+- `backup-menu.tsx`: header backup popover
 - `timer/`: `TimerView`, `ScrambleNet`, `SessionStats`, `SolveList`, `SessionPicker`, `PenaltyToggle`
 - `analyze/`: `AnalyzeView`, charts (`TrendChart`, `HistogramChart`, `QQChart`, `GroupBarChart`) and test panels
 

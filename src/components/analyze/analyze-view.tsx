@@ -657,19 +657,20 @@ function SolveTable({ solves, samples, sessionName }: { solves: Solve[]; samples
   }
 
   function exportJson() {
-    download("last-layer-backup.json", JSON.stringify({ version: 1, timer: data, drillLog: log }, null, 1), "application/json");
+    download("last-layer-solves.json", JSON.stringify({ version: 1, timer: data, drillLog: log }, null, 1), "application/json");
   }
 
   async function importJson(file: File) {
     try {
       const parsed = JSON.parse(await file.text());
-      const timer = parsed.timer ?? parsed;
+      // A solves export, or a full backup from the header.
+      const timer = parsed.timer ?? parsed.data?.["last-layer:timer:v1"] ?? parsed;
       if (!Array.isArray(timer.solves)) throw new Error("no solves");
       const valid = timer.solves.filter((s: Partial<Solve>) => typeof s.ms === "number" && typeof s.at === "number" && typeof s.id === "string");
       importTimerData({ solves: valid.map((s: Solve) => ({ ...s, penalty: s.penalty ?? "none", scramble: s.scramble ?? "", session: s.session ?? "main" })), sessions: timer.sessions });
       toast(`Imported ${valid.length} solves`, { description: "Solves you already had were skipped." });
     } catch {
-      toast("Couldn't import that file", { description: "Pick a backup saved from Analyze with Save backup." });
+      toast("Couldn't import that file", { description: "Pick a file saved with Export JSON or Save backup." });
     }
   }
 
@@ -697,11 +698,11 @@ function SolveTable({ solves, samples, sessionName }: { solves: Solve[]; samples
           </Button>
           <Button variant="outline" size="sm" onClick={exportJson}>
             <DownloadIcon data-icon="inline-start" />
-            Save backup
+            Export JSON
           </Button>
           <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()}>
             <UploadIcon data-icon="inline-start" />
-            Import backup
+            Import solves
           </Button>
           <input
             ref={fileRef}

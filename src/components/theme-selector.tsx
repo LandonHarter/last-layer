@@ -48,7 +48,7 @@ export function ThemeSelector() {
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
         aria-label={`Theme: ${current.name}. Change theme`}
-        className="group flex h-9 items-center gap-2 rounded-lg border border-border bg-card px-1.5 pr-3 text-sm font-medium transition-colors hover:bg-muted"
+        className="group flex h-9 items-center gap-2 rounded-lg border border-border bg-card px-1.5 text-sm font-medium sm:pr-3 transition-colors hover:bg-muted"
       >
         <FlatFace stickers={current.stickers} className="size-6 transition-transform duration-300 group-hover:rotate-90 motion-reduce:transition-none" />
         <span className="hidden sm:inline">{current.name}</span>
