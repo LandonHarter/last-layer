@@ -16,24 +16,41 @@ import { entryFor, getProgress, mainAlg, recordAttempt, setStatus, useProgress, 
 import { pickNext, STATUS_WEIGHT } from "@/lib/scheduler";
 import { makeSetup } from "@/lib/setup";
 import { logDrillAttempt } from "@/lib/solves";
+import { createStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
-type SetFilter = "all" | AlgSet;
+type StatusFilter = "learning" | "learned" | "both";
+type DrillFilter = { sets: AlgSet[]; status: StatusFilter };
 
-function poolFor(progress: Progress, set: SetFilter) {
-  return ALGS.filter((a) => set === "all" || a.set === set)
+const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
+  { value: "learning", label: "In progress" },
+  { value: "learned", label: "Learned" },
+  { value: "both", label: "Both" },
+];
+
+const filterStore = createStore<DrillFilter>("last-layer:drill-filter:v1", { sets: [...SETS], status: "learning" });
+
+/** Cases in the chosen sets that you've started (In progress or Learned). */
+function startedIn(progress: Progress, sets: AlgSet[]) {
+  return ALGS.filter((a) => sets.includes(a.set))
     .map((a) => ({ id: a.id, entry: entryFor(progress, a.id) }))
     .filter((p) => STATUS_WEIGHT[p.entry.status] > 0);
 }
 
+function poolFor(progress: Progress, filter: DrillFilter) {
+  return startedIn(progress, filter.sets).filter((p) => filter.status === "both" || p.entry.status === filter.status);
+}
+
 export function DrillView() {
   const progress = useProgress();
-  const [set, setSet] = useState<SetFilter>("all");
+  const filter = filterStore.use();
   const [session, setSession] = useState<SessionState | null>(null);
 
-  const pool = poolFor(progress, set);
-  const learning = pool.filter((p) => p.entry.status === "learning").length;
-  const learned = pool.length - learning;
+  const pool = poolFor(progress, filter);
+  const started = startedIn(progress, filter.sets);
+  const learning = started.filter((p) => p.entry.status === "learning").length;
+  const learned = started.length - learning;
+  const includes = (status: "learning" | "learned") => filter.status === "both" || filter.status === status;
 
   function start() {
     const first = pickNext(pool, []);
@@ -41,7 +58,7 @@ export function DrillView() {
   }
 
   if (session) {
-    return <Session session={session} setSession={setSession} set={set} progress={progress} />;
+    return <Session session={session} setSession={setSession} filter={filter} progress={progress} />;
   }
 
   return (
@@ -50,37 +67,56 @@ export function DrillView() {
         <h1 className="text-4xl font-extrabold leading-[1.05] tracking-tight sm:text-5xl">Drill your algorithms</h1>
         <p className="mt-4 max-w-prose text-base leading-relaxed text-muted-foreground">
           You&apos;ll see a case and moves that set it up. Do the setup on your cube, solve it with your algorithm, then
-          mark how it went. Setups change every time and never just undo your algorithm. In progress cases come up about six times as often as learned ones, and a miss brings a case
-          back sooner.
+          mark how it went. Setups change every time and never just undo your algorithm. Pick which sets to mix and whether to
+          include cases you&apos;ve learned. With both, In progress cases come up about six times as often as learned ones,
+          and a miss brings a case back sooner.
         </p>
       </div>
 
       <div className="flex flex-col gap-5 rounded-xl border border-border bg-card p-5 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <span className="text-sm font-semibold">Cases to drill</span>
+          <span className="text-sm font-semibold">Sets</span>
           <ToggleGroup
-            value={[set]}
-            onValueChange={(v) => v[0] && setSet(v[0] as SetFilter)}
+            multiple
+            value={filter.sets}
+            onValueChange={(v) => v.length > 0 && filterStore.write({ ...filter, sets: SETS.filter((s) => v.includes(s)) })}
             variant="outline"
             spacing={0}
-            aria-label="Algorithm set"
+            aria-label="Algorithm sets"
           >
-            {(["all", ...SETS] as const).map((s) => (
+            {SETS.map((s) => (
               <ToggleGroupItem key={s} value={s} className="px-3 font-semibold aria-pressed:bg-foreground aria-pressed:text-background">
-                {s === "all" ? "All" : s}
+                {s}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <span className="text-sm font-semibold">Cases</span>
+          <ToggleGroup
+            value={[filter.status]}
+            onValueChange={(v) => v[0] && filterStore.write({ ...filter, status: v[0] as StatusFilter })}
+            variant="outline"
+            spacing={0}
+            aria-label="Which cases to drill"
+          >
+            {STATUS_FILTERS.map((f) => (
+              <ToggleGroupItem key={f.value} value={f.value} className="px-3 font-semibold aria-pressed:bg-foreground aria-pressed:text-background">
+                {f.label}
               </ToggleGroupItem>
             ))}
           </ToggleGroup>
         </div>
 
         <dl className="grid grid-cols-2 gap-3">
-          <div className="rounded-lg bg-muted p-4">
+          <div className={cn("rounded-lg bg-muted p-4 transition-opacity", !includes("learning") && "opacity-40")}>
             <dt className="flex items-center gap-2 text-sm text-muted-foreground">
               <span className="size-2.5 rounded-[2px] bg-learning" /> In progress
             </dt>
             <dd className="mt-1 text-4xl font-extrabold tabular-nums">{learning}</dd>
           </div>
-          <div className="rounded-lg bg-muted p-4">
+          <div className={cn("rounded-lg bg-muted p-4 transition-opacity", !includes("learned") && "opacity-40")}>
             <dt className="flex items-center gap-2 text-sm text-muted-foreground">
               <span className="size-2.5 rounded-[2px] bg-learned" /> Learned
             </dt>
@@ -91,8 +127,9 @@ export function DrillView() {
         {pool.length === 0 ? (
           <div className="flex flex-col items-start gap-3">
             <p className="text-sm text-muted-foreground">
-              Nothing to drill yet. Mark algorithms as In progress or Learned in the Library and they&apos;ll show up
-              here.
+              {started.length > 0
+                ? `No ${filter.status === "learning" ? "In progress" : "Learned"} cases in ${filter.sets.join(", ")}. Pick another option above, or mark algorithms in the Library.`
+                : "Nothing to drill yet. Mark algorithms as In progress or Learned in the Library and they'll show up here."}
             </p>
             <Link href="/" className={buttonVariants({ size: "lg" })}>
               Open the Library
@@ -119,12 +156,12 @@ function setupFor(id: string): string {
 function Session({
   session,
   setSession,
-  set,
+  filter,
   progress,
 }: {
   session: SessionState;
   setSession: (s: SessionState | null) => void;
-  set: SetFilter;
+  filter: DrillFilter;
   progress: Progress;
 }) {
   const [revealed, setRevealed] = useState(false);
@@ -153,7 +190,7 @@ function Session({
           action: { label: "Move to In progress", onClick: () => setStatus(alg.id, "learning") },
         });
       }
-      const next = pickNext(poolFor(getProgress(), set), session.recent);
+      const next = pickNext(poolFor(getProgress(), filter), session.recent);
       setRevealed(false);
       setHinted(false);
       setEditingNotes(false);
@@ -166,7 +203,7 @@ function Session({
         missed: session.missed + (success ? 0 : 1),
       });
     },
-    [alg, revealed, hinted, session, set, setSession],
+    [alg, revealed, hinted, session, filter, setSession],
   );
 
   useEffect(() => {

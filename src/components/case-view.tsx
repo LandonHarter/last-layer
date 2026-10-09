@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ChevronLeftIcon, ChevronRightIcon, RefreshCwIcon } from "lucide-react";
+import { ArrowLeftIcon, ChevronLeftIcon, ChevronRightIcon, RefreshCwIcon } from "lucide-react";
 import { toast } from "sonner";
 import { ALGS, ALGS_BY_ID, type Alg } from "@/data/algs";
 import { CaseImage } from "@/components/algs/case-image";
@@ -33,13 +33,15 @@ export function CaseView({ id }: { id: string }) {
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-4 py-6 sm:px-6 md:py-10">
       <nav className="flex flex-wrap items-center justify-between gap-3 text-sm" aria-label="Cases">
-        <p className="text-muted-foreground">
-          <Link href="/" className="font-semibold text-foreground underline-offset-4 hover:underline">
-            Library
+        <div className="flex items-center gap-2">
+          <Link href="/" className={buttonVariants({ variant: "outline" })}>
+            <ArrowLeftIcon data-icon="inline-start" />
+            Back to library
           </Link>
-          <span aria-hidden> / </span>
-          {alg.set} <span aria-hidden>/</span> {alg.group}
-        </p>
+          <p className="text-muted-foreground">
+            {alg.set} <span aria-hidden>/</span> {alg.group}
+          </p>
+        </div>
         <div className="flex gap-1">
           <CaseLink alg={prev} dir="prev" />
           <CaseLink alg={next} dir="next" />
