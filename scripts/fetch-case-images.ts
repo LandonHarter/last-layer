@@ -1,12 +1,14 @@
 /**
- * Downloads a top-down case image for every algorithm from the VisualCube API
- * into public/cases/{id}.svg. Run once (or after editing algs):
+ * Writes a case image for every algorithm into public/cases/{id}.svg: 3x3
+ * cases from the VisualCube API, every other puzzle drawn locally from its
+ * simulator (`case-svg.ts`). Run once (or after editing algs):
  *   bun scripts/fetch-case-images.ts [--force]
  */
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { ALGS } from "../src/data/algs";
 import { topStickerMoves } from "../src/lib/cube";
+import { caseSvg } from "./case-svg";
 
 const OUT = join(import.meta.dir, "..", "public", "cases");
 const API = "https://visualcube.api.cubing.net/";
@@ -39,6 +41,13 @@ let fetched = 0;
 for (const alg of ALGS) {
   const file = join(OUT, `${alg.id}.svg`);
   if (existsSync(file) && !force) continue;
+  const drawn = caseSvg(alg);
+  if (drawn) {
+    writeFileSync(file, drawn);
+    fetched++;
+    console.log(`drew ${alg.id}`);
+    continue;
+  }
   const res = await fetch(urlFor(alg));
   const body = await res.text();
   if (!res.ok || !body.includes("<svg")) {
@@ -48,4 +57,4 @@ for (const alg of ALGS) {
   fetched++;
   console.log(`saved ${alg.id}`);
 }
-console.log(`done: ${fetched} fetched, ${ALGS.length - fetched} already present`);
+console.log(`done: ${fetched} written, ${ALGS.length - fetched} already present`);

@@ -3,13 +3,16 @@
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { SearchIcon, XIcon } from "lucide-react";
-import { ALGS, GROUPS, SET_TITLES, SETS, type Alg, type AlgSet } from "@/data/algs";
+import { algsOf, GROUPS, SET_TITLES, type Alg, type AlgSet } from "@/data/algs";
 import { AlgCard } from "@/components/algs/alg-card";
+import { PuzzleSelect } from "@/components/puzzle-select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { entryFor, STATUS_LABELS, useProgress, type Progress, type Status } from "@/lib/progress";
+import { setPuzzle, usePuzzle } from "@/lib/puzzle-choice";
+import { HEADLINES, PUZZLE_NAMES, PUZZLES, setLabel, setsOf, type Puzzle } from "@/lib/puzzles";
 import { cn } from "@/lib/utils";
 
 type SetFilter = "all" | AlgSet;
@@ -26,20 +29,21 @@ const SWATCH: Record<Status, string> = {
   learned: "bg-learned",
 };
 
-const bareName = (alg: Alg) => alg.name.toLowerCase().replace(/^(f2l|oll) /, "").replace(/ perm$/, "");
+const bareName = (alg: Alg) =>
+  alg.name.toLowerCase().replace(/^(f2l|oll|eo|co|ep|cp) /, "").replace(/ perm$/, "");
 
-/** Search matcher. A query naming a case ("21", "t perm", "j") shows just those cases. */
-function makeMatcher(query: string): (alg: Alg) => boolean {
+/** Search matcher over one puzzle's cases. A query naming a case ("21", "t perm", "j") shows just those cases. */
+function makeMatcher(query: string, algs: Alg[]): (alg: Alg) => boolean {
   const raw = query.replace(/\s+/g, " ").trim();
   if (!raw) return () => true;
   const q = raw.toLowerCase();
   // "oll 21" means that case only; a bare "21" matches both F2L 21 and OLL 21.
-  const prefix = /^(f2l|oll|pll)\b/.exec(q)?.[1]?.toUpperCase();
-  const inSet = (a: Alg) => !prefix || a.set === prefix;
-  const bare = q.replace(/^(f2l|oll|pll)\s*/, "").replace(/\s*perm$/, "");
-  if (ALGS.some((a) => inSet(a) && bareName(a) === bare)) return (a) => inSet(a) && bareName(a) === bare;
+  const prefix = /^(f2l|oll|pll|pbl|eo|co|ep|cp)\b/.exec(q)?.[1]?.toUpperCase();
+  const inSet = (a: Alg) => !prefix || setLabel(a.set).toUpperCase() === prefix;
+  const bare = q.replace(/^(f2l|oll|pll|pbl|eo|co|ep|cp)\s*/, "").replace(/\s*perm$/, "");
+  if (algs.some((a) => inSet(a) && bareName(a) === bare)) return (a) => inSet(a) && bareName(a) === bare;
   // "j" or "g" means the J or G perms, not every shape with that letter in it.
-  if (/^[a-z]$/.test(bare) && ALGS.some((a) => bareName(a).startsWith(bare))) {
+  if (/^[a-z]$/.test(bare) && algs.some((a) => a.set === "PLL" && bareName(a).startsWith(bare))) {
     return (a) => a.set === "PLL" && bareName(a).startsWith(bare);
   }
   return (a) =>
@@ -49,23 +53,26 @@ function makeMatcher(query: string): (alg: Alg) => boolean {
     a.algs.some((alg) => alg.includes(raw));
 }
 
-type Filters = { query: string; set: SetFilter; status: StatusFilter; group: string };
+type Filters = { puzzle?: Puzzle; query: string; set: SetFilter; status: StatusFilter; group: string };
 
 const DEFAULT_FILTERS: Filters = { query: "", set: "all", status: "all", group: "all" };
 
-/** Filters from the URL (`?q=&set=&status=&shape=`), ignoring values that don't exist. */
+/** Filters from the URL (`?puzzle=&q=&set=&status=&shape=`), ignoring values that don't exist. */
 function readFilters(params: URLSearchParams): Filters {
+  const puzzle = PUZZLES.find((p) => p === params.get("puzzle"));
+  const SETS = puzzle ? setsOf(puzzle) : PUZZLES.flatMap(setsOf);
   const set = SETS.find((s) => s === params.get("set")) ?? "all";
   const status = (Object.keys(STATUS_LABELS) as Status[]).find((s) => s === params.get("status")) ?? "all";
   const shape = params.get("shape") ?? "";
   const [shapeSet, shapeGroup] = shape.split(/:(.*)/);
   const validShape =
     SETS.some((s) => s === shapeSet && (set === "all" || set === s) && GROUPS[s].includes(shapeGroup ?? ""));
-  return { query: params.get("q") ?? "", set, status, group: validShape ? shape : "all" };
+  return { puzzle, query: params.get("q") ?? "", set, status, group: validShape ? shape : "all" };
 }
 
-function writeFilters({ query, set, status, group }: Filters) {
+function writeFilters({ puzzle, query, set, status, group }: Filters) {
   const params = new URLSearchParams();
+  if (puzzle && puzzle !== "3x3") params.set("puzzle", puzzle);
   if (query) params.set("q", query);
   if (set !== "all") params.set("set", set);
   if (status !== "all") params.set("status", status);
@@ -86,26 +93,45 @@ export function LibraryFromUrl() {
 
 export function LibraryView({ initial = DEFAULT_FILTERS, syncUrl = false }: { initial?: Filters; syncUrl?: boolean }) {
   const progress = useProgress();
+  const puzzle = usePuzzle();
   const [query, setQuery] = useState(initial.query);
-  const [set, setSet] = useState<SetFilter>(initial.set);
+  const [chosenSet, setSet] = useState<SetFilter>(initial.set);
   const [status, setStatusFilter] = useState<StatusFilter>(initial.status);
-  const [group, setGroup] = useState(initial.group);
+  const [chosenGroup, setGroup] = useState(initial.group);
   const deferredQuery = useDeferredValue(query);
+  const sets = setsOf(puzzle);
+  // A set or shape from another puzzle (an old link, or the puzzle changed elsewhere) means no filter.
+  const set: SetFilter = chosenSet !== "all" && sets.includes(chosenSet) ? chosenSet : "all";
+  const group = sets.some((s) => chosenGroup.startsWith(`${s}:`)) ? chosenGroup : "all";
+  const puzzleAlgs = algsOf(puzzle);
+
+  // A link with ?puzzle= picks that puzzle for every page.
+  useEffect(() => {
+    if (initial.puzzle) setPuzzle(initial.puzzle);
+  }, [initial.puzzle]);
 
   useEffect(() => {
-    if (syncUrl) writeFilters({ query: deferredQuery, set, status, group });
-  }, [syncUrl, deferredQuery, set, status, group]);
+    if (syncUrl) writeFilters({ puzzle, query: deferredQuery, set, status, group });
+  }, [syncUrl, puzzle, deferredQuery, set, status, group]);
+
+  function choosePuzzle(next: Puzzle) {
+    setPuzzle(next);
+    setSet("all");
+    setGroup("all");
+  }
 
   const groupItems = useMemo(() => {
-    const sets: AlgSet[] = set === "all" ? SETS : [set];
+    const inView: AlgSet[] = set === "all" ? setsOf(puzzle) : [set];
     return [
       { value: "all", label: "Any shape" },
-      ...sets.flatMap((s) => GROUPS[s].map((g) => ({ value: `${s}:${g}`, label: set === "all" ? `${g} (${s})` : g }))),
+      ...inView.flatMap((s) =>
+        GROUPS[s].map((g) => ({ value: `${s}:${g}`, label: set === "all" && inView.length > 1 ? `${g} (${setLabel(s)})` : g })),
+      ),
     ];
-  }, [set]);
+  }, [set, puzzle]);
 
-  const matches = makeMatcher(deferredQuery);
-  const visible = ALGS.filter(
+  const matches = makeMatcher(deferredQuery, puzzleAlgs);
+  const visible = puzzleAlgs.filter(
     (a) =>
       (set === "all" || a.set === set) &&
       (status === "all" || entryFor(progress, a.id).status === status) &&
@@ -125,26 +151,25 @@ export function LibraryView({ initial = DEFAULT_FILTERS, syncUrl = false }: { in
     <>
       <section className="mx-auto grid w-full max-w-7xl px-4 sm:px-6 gap-8 py-10 md:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] md:items-end md:py-14">
         <div className="max-w-xl">
-          <h1 className="text-4xl font-extrabold leading-[1.05] tracking-tight text-balance sm:text-5xl">
-            Every F2L, OLL and PLL case, one place to learn them
-          </h1>
+          <h1 className="text-4xl font-extrabold leading-[1.05] tracking-tight text-balance sm:text-5xl">{HEADLINES[puzzle]}</h1>
           <p className="mt-4 max-w-prose text-base leading-relaxed text-muted-foreground">
             Mark a case <strong className="font-semibold text-foreground">In progress</strong> when you start learning it.
             In progress and Learned cases show up in Drill, with the ones you&apos;re still learning coming back most.
             Open a case to see every algorithm for it and pick the one you use.
           </p>
         </div>
-        <ProgressBoard progress={progress} />
+        <ProgressBoard progress={progress} puzzle={puzzle} />
       </section>
 
       <div className="sticky top-14 z-30 mb-6 border-y border-border bg-background/90 py-3 backdrop-blur">
         <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center gap-2 px-4 sm:px-6">
+          <PuzzleSelect value={puzzle} onChange={choosePuzzle} />
           <div className="relative min-w-52 flex-1">
             <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search: OLL 21, T perm, R U R'…"
+              placeholder={puzzle === "3x3" ? "Search: OLL 21, T perm, R U R'…" : `Search ${PUZZLE_NAMES[puzzle]} cases or moves…`}
               aria-label="Search algorithms"
               className="h-9 pl-8"
             />
@@ -161,9 +186,9 @@ export function LibraryView({ initial = DEFAULT_FILTERS, syncUrl = false }: { in
             size="lg"
             aria-label="Algorithm set"
           >
-            {(["all", ...SETS] as const).map((s) => (
+            {(["all", ...sets] as const).map((s) => (
               <ToggleGroupItem key={s} value={s} className="px-3 font-semibold aria-pressed:bg-foreground aria-pressed:text-background">
-                {s === "all" ? "All" : s}
+                {s === "all" ? "All" : setLabel(s)}
               </ToggleGroupItem>
             ))}
           </ToggleGroup>
@@ -203,27 +228,27 @@ export function LibraryView({ initial = DEFAULT_FILTERS, syncUrl = false }: { in
 
       <div className="mx-auto w-full max-w-7xl px-4 pb-24 sm:px-6">
       <p className="mb-4 text-sm text-muted-foreground" aria-live="polite">
-        Showing {visible.length} of {ALGS.length}
+        Showing {visible.length} of {puzzleAlgs.length}
       </p>
 
       {visible.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border px-6 py-16 text-center">
           <p className="font-semibold">No algorithms match these filters.</p>
-          <p className="mt-1 text-sm text-muted-foreground">Try a case number like 21, a letter like T, or a move like R U R&apos;.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Try a case name or number, a letter like T, or a move like R U R&apos;.</p>
           <Button variant="outline" className="mt-4" onClick={clear}>
             Clear filters
           </Button>
         </div>
       ) : (
-        <Sections algs={visible} progress={progress} />
+        <Sections algs={visible} progress={progress} puzzle={puzzle} />
       )}
       </div>
     </>
   );
 }
 
-function Sections({ algs, progress }: { algs: Alg[]; progress: Progress }) {
-  const sets = SETS.map((set) => ({
+function Sections({ algs, progress, puzzle }: { algs: Alg[]; progress: Progress; puzzle: Puzzle }) {
+  const sets = setsOf(puzzle).map((set) => ({
       set,
       groups: GROUPS[set]
         .map((group) => ({ group, algs: algs.filter((a) => a.set === set && a.group === group) }))
@@ -237,7 +262,7 @@ function Sections({ algs, progress }: { algs: Alg[]; progress: Progress }) {
         <section key={set} aria-labelledby={`set-${set}`}>
           <h2 id={`set-${set}`} className="mb-6 text-3xl font-extrabold tracking-tight">
             {SET_TITLES[set]}
-            <span className="ml-3 align-middle text-base font-semibold text-muted-foreground">{set}</span>
+            <span className="ml-3 align-middle text-base font-semibold text-muted-foreground">{setLabel(set)}</span>
           </h2>
           <div className="flex flex-col gap-10">
             {groups.map(({ group, algs: groupAlgs }) => (
@@ -261,11 +286,11 @@ function Sections({ algs, progress }: { algs: Alg[]; progress: Progress }) {
 }
 
 /** One square per algorithm, coloured by status: progress read like a cube face. */
-function ProgressBoard({ progress }: { progress: Progress }) {
+function ProgressBoard({ progress, puzzle }: { progress: Progress; puzzle: Puzzle }) {
   return (
     <div className="flex flex-col gap-4">
-      {SETS.map((set) => {
-        const algs = ALGS.filter((a) => a.set === set);
+      {setsOf(puzzle).map((set) => {
+        const algs = algsOf(puzzle).filter((a) => a.set === set);
         const counts = { learning: 0, learned: 0 };
         for (const a of algs) {
           const s = entryFor(progress, a.id).status;
@@ -274,12 +299,12 @@ function ProgressBoard({ progress }: { progress: Progress }) {
         return (
           <div key={set}>
             <div className="mb-1.5 flex items-baseline justify-between text-sm">
-              <span className="font-bold">{set}</span>
+              <span className="font-bold">{setLabel(set)}</span>
               <span className="text-muted-foreground tabular-nums">
                 {counts.learned} learned, {counts.learning} in progress, of {algs.length}
               </span>
             </div>
-            {/* Three rows each, at the same sticker size: OLL 19 wide, F2L 14 (41 leaves one gap), PLL 7. */}
+            {/* Three rows each, at the same sticker size as the widest (3x3 OLL, 19 wide): F2L 14 (41 leaves one gap), PLL 7. */}
             <div
               className="grid gap-[3px] rounded-md bg-foreground p-[3px]"
               style={{

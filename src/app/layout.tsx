@@ -22,8 +22,8 @@ const jetbrains = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Last Layer: F2L, OLL and PLL trainer",
-  description: "Learn and drill every F2L, OLL and PLL algorithm.",
+  title: "Last Layer: algorithm trainer for 2x2 to 7x7 and megaminx",
+  description: "Learn and drill every F2L, OLL and PLL algorithm, plus 2x2 Ortega, big-cube parity and the megaminx last layer.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

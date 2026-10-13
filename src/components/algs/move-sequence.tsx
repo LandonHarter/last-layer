@@ -1,4 +1,4 @@
-import { splitMoves } from "@/lib/notation";
+import { splitMoves, type Notation } from "@/lib/notation";
 import { chunkAlg } from "@/lib/triggers";
 import { cn } from "@/lib/utils";
 
@@ -10,13 +10,16 @@ import { cn } from "@/lib/utils";
 export function MoveSequence({
   alg,
   grouped,
+  notation,
   className,
 }: {
   alg: string;
   grouped?: boolean | "labeled";
+  /** Which puzzle's notation, so megaminx algs don't get 3x3 trigger names. */
+  notation?: Notation;
   className?: string;
 }) {
-  const chunks = grouped ? chunkAlg(alg) : [];
+  const chunks = grouped ? chunkAlg(alg, notation) : [];
   // One chunk is only worth drawing as a group when it has a name to show.
   if (chunks.length < 2 && !(grouped === "labeled" && chunks[0]?.name)) {
     return (

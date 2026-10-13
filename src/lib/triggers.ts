@@ -1,6 +1,7 @@
 import { ALGS, type Alg } from "@/data/algs";
 import { fitAlg } from "./cases";
-import { invertAlg, mirrorAlg, moveCount, parseAlg, splitMoves } from "./notation";
+import { invertAlg, mirrorAlg, moveCount, splitMoves, tokens, type Notation } from "./notation";
+import { notationOf } from "./puzzles";
 
 /** A piece of an algorithm to remember as one unit. Named when it is a well-known trigger. */
 export type Chunk = { moves: string[]; name?: string };
@@ -53,14 +54,18 @@ function splitRun(run: string[]): Chunk[] {
   return out;
 }
 
+// On a megaminx U2 is two fifths, so the Sunes are different algs there; the quarter-turn triggers still fit.
+const MEGA_TRIGGERS = TRIGGERS.filter((t) => t.moves.every((m) => !m.includes("2")));
+
 /** Break an algorithm into chunks to learn one at a time: named triggers where they fit. */
-export function chunkAlg(alg: string): Chunk[] {
+export function chunkAlg(alg: string, notation: Notation = "cube"): Chunk[] {
+  const triggers = notation === "megaminx" ? MEGA_TRIGGERS : TRIGGERS;
   const moves = splitMoves(alg);
   const chunks: Chunk[] = [];
   let run: string[] = [];
   let i = 0;
   while (i < moves.length) {
-    const hit = TRIGGERS.find((t) => t.moves.every((m, j) => moves[i + j] === m));
+    const hit = triggers.find((t) => t.moves.every((m, j) => moves[i + j] === m));
     if (!hit) {
       run.push(moves[i++]);
       continue;
@@ -95,14 +100,15 @@ function mergeTiny(chunks: Chunk[]): Chunk[] {
 
 /** Short facts about an algorithm, for comparing the options for a case. */
 export function describeAlg(alg: string): string[] {
-  const bases = new Set(parseAlg(alg).map((m) => m.base.replace("w", "")));
+  const layers = tokens(alg).map((t) => t.replace(/(2'|2|')$/, ""));
+  const bases = new Set(layers.map((b) => (/^[RLUDFB]w$/.test(b) ? b[0].toLowerCase() : b)));
   const tags: string[] = [`${moveCount(alg)} moves`];
   const faces = [...bases].filter((b) => /^[RLUDFB]$/.test(b));
   if ([...bases].every((b) => b === "R" || b === "U")) tags.push("Only R and U");
   else if ([...bases].every((b) => b === "L" || b === "U")) tags.push("Only L and U");
   else if (faces.length === bases.size && faces.length <= 3) tags.push(`Only ${faces.join(", ")}`);
-  if ([...bases].some((b) => /^[rludfb]$/.test(b))) tags.push("Wide moves");
-  if ([...bases].some((b) => /^[MES]$/.test(b))) tags.push("Slice moves");
+  if ([...bases].some((b) => /^\d?[rludfb]$|^\d[RLUDFB]w$/.test(b))) tags.push("Wide moves");
+  if ([...bases].some((b) => /^[MES]$|^\d[RLUDFB]$/.test(b))) tags.push("Slice moves");
   if ([...bases].some((b) => /^[xyz]$/.test(b))) tags.push("Rotation");
   if (bases.has("D")) tags.push("D turns");
   if (bases.has("B")) tags.push("B turns");
@@ -111,7 +117,6 @@ export function describeAlg(alg: string): string[] {
 
 export type Tip = { text: string; caseId?: string };
 
-const PLANE = { F2L: "FR", OLL: "M", PLL: "M" } as const;
 
 /**
  * Other cases whose algorithm, mirrored or done backwards, solves this one.
@@ -122,8 +127,10 @@ export function relatives(target: Alg, mainOf: (a: Alg) => string): { alg: Alg; 
   for (const other of ALGS) {
     if (other.set !== target.set || other.id === target.id) continue;
     const main = mainOf(other);
-    if (fitAlg(target.set, target.algs[0], mirrorAlg(main, PLANE[target.set]))) out.push({ alg: other, how: "mirror" });
-    else if (fitAlg(target.set, target.algs[0], invertAlg(main))) out.push({ alg: other, how: "inverse" });
+    const notation = notationOf(target.set);
+    // F2L mirrors through the front-right edge so the slot stays put; everything else left for right.
+    if (fitAlg(target, mirrorAlg(main, target.set === "F2L" ? "FR" : "M", notation))) out.push({ alg: other, how: "mirror" });
+    else if (fitAlg(target, invertAlg(main, notation))) out.push({ alg: other, how: "inverse" });
   }
   return out;
 }
@@ -134,7 +141,7 @@ export function relatives(target: Alg, mainOf: (a: Alg) => string): { alg: Alg; 
  */
 export function memoryTips(target: Alg, alg: string, mainOf: (a: Alg) => string, learned: Set<string>, batch: Set<string> = new Set()): Tip[] {
   const tips: Tip[] = [];
-  const chunks = chunkAlg(alg);
+  const chunks = chunkAlg(alg, notationOf(target.set));
   const count = moveCount(alg);
 
   const rank = (id: string) => (learned.has(id) ? 2 : batch.has(id) ? 1 : 0);
@@ -159,7 +166,7 @@ export function memoryTips(target: Alg, alg: string, mainOf: (a: Alg) => string,
     tips.push({ text: `Built on ${names.join(", ")}. Your hands already know ${names.length === 1 ? "it" : "these"}; remember what goes between.` });
   }
 
-  const bases = new Set(parseAlg(alg).map((m) => m.base));
+  const bases = new Set(tokens(alg).map((t) => t.replace(/(2'|2|')$/, "")));
   if ([...bases].every((b) => b === "R" || b === "U")) tips.push({ text: "Only R and U turns: keep your grip and don't regrip." });
 
   if (chunks.length >= 4) {

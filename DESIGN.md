@@ -1,6 +1,6 @@
 # Design
 
-Last Layer is a practice tool for someone holding a cube. It has two modes: Algorithms (F2L, OLL and PLL) and Timer (full solves), plus Analyze for the data both produce. They look at the screen between turns, so cases and moves must be readable at arm's length and everything else stays quiet.
+Last Layer is a practice tool for someone holding a cube. It has two modes: Algorithms (3x3 F2L, OLL and PLL, plus 2x2 Ortega, 4x4 to 7x7 parity and the megaminx last layer) and Timer (full solves), plus Analyze for the data both produce. They look at the screen between turns, so cases and moves must be readable at arm's length and everything else stays quiet.
 
 ## Principles
 
@@ -43,17 +43,17 @@ Sticker palettes for the picker previews live in `src/lib/themes.ts`, because th
 
 - **Header:** sticky. Holds the wordmark (hidden below `sm`), the Algorithms/Timer mode switch (active filled with primary; icons only below `md`), that mode's nav (Library, Learn, Drill, Analyze or Timer, Analyze; active filled with foreground), the backup button (a popover to save all data to a file or load one, which replaces this browser's data after a confirm), and the theme button. Below `sm` the nav text and gaps shrink so it fits at 375px. Opening a page of one mode switches to it; Analyze follows the last mode. While the timer runs, the header fades out (`data-timing` on `<html>`).
 - **Library (`/`):**
-  - Hero: headline and short explainer on the left, progress board on the right. Every set is 3 rows at the same square size: OLL 19 wide, F2L 14 (41 cases leave one gap), PLL 7.
-  - Filter bar: full width and sticky under the header. Contains search, an All/F2L/OLL/PLL toggle, a status select, and a shape select. Filters are kept in the URL (`?q=&set=&status=&shape=`, replaced rather than pushed), so a refresh or Back keeps them.
+  - Hero: headline (one per puzzle) and short explainer on the left, progress board for the puzzle's sets on the right. Every set is 3 rows at the same square size as 3x3 OLL (19 wide): F2L 14 (41 cases leave one gap), PLL 7.
+  - Filter bar: full width and sticky under the header. Contains the puzzle select (shared with Learn and Drill), search, an All plus that puzzle's sets toggle, a status select, and a shape select. Filters are kept in the URL (`?puzzle=&q=&set=&status=&shape=`, replaced rather than pushed; 3x3 leaves out `puzzle`), so a refresh or Back keeps them.
   - Content: sections per set, then per shape group. Cards sit in an auto-fill grid (min 12.5rem). On mobile, cards switch to horizontal rows with the image on the left.
   - Card: case image on a muted tile, name (links to the case page), drill score, your main algorithm in mono, a link to the other algorithms, and a three-way status toggle.
 - **Learn (`/learn`):**
-  - Overview: set toggle, cases per batch (3 to 6), learned count, your current batch (cases with stage or streak dots, Continue, Stop this batch), then suggested batches, each with case chips, why they belong together, and Start.
+  - Overview: puzzle select and set toggle, cases per batch (3 to 6), learned count, your current batch (cases with stage or streak dots, Continue, Stop this batch), then suggested batches, each with case chips, why they belong together, and Start.
   - Session: batch strip on top (each case is a button that opens it: Recall once studied, otherwise Pick or Study), case image on the left (4fr) with the status toggle, (after Pick) a Your algorithm select, and a Your notes box under it, the step on the right (8fr). Switching algorithm sends the case back to Study. Cases marked Learned, here or in the Library, drop out of the batch; Pick also has Mark it Learned and skip it. Skip for now (under the status toggle, at any step) takes a case out of the batch without marking it Learned, with Undo in the toast; it comes back in the suggested batches, and it isn't marked Learned when the batch finishes. Steps: Pick (every algorithm as chunks with tags, Try it shows a setup, Make it yours, Learn this one), Study (setup, then chunks one at a time with the current one in primary, then From memory with blanks you can tap to peek, plus tips), Recall (setup, Show me or Got it, streak dots).
   - A case is solid after 3 clean recalls in a row. A new case comes in only when fewer than two are shaky and each has one clean recall. A finished batch is marked Learned.
   - Keyboard: Space next chunk or Show me, K Got it, N new setup.
 - **Drill (`/drill`):**
-  - Idle: counts of In progress and Learned cases, plus a Start button. With nothing to drill, it shows a message and a link to the Library.
+  - Idle: puzzle select, set toggle (each puzzle remembers its own picks), counts of In progress and Learned cases, plus a Start button. With nothing to drill, it shows a message and a link to the Library.
   - Session: case image on the left (5fr), work column on the right (7fr). The work column holds setup moves with a New setup button, then the Reveal card (a Hint button that shows your notes, if the case has any; after Reveal: name, group, your algorithm, your notes with Edit (or Add notes), link to all algorithms, status toggle). Shortcuts are off while typing in the notes, and Esc there closes the editor, then Missed and Got it buttons. Setups are random and never just undo your algorithm. On mobile this stacks, with a smaller image so the buttons stay reachable.
   - Keyboard: Space reveals, H shows the hint, J/← is Missed, K/→ is Got it, N gives a new setup, Esc ends the session.
 - **Timer (`/timer`):**
@@ -71,7 +71,7 @@ Sticker palettes for the picker previews live in `src/lib/themes.ts`, because th
   - Tables: all solves with CSV export and JSON export/import of solves (import merges, and also reads a full backup), or all cases sorted by most missed.
   - Charts are hand-built SVG in `analyze/charts.tsx`: 2px lines, dots with a surface ring, columns at most 24px with a rounded top, hairline gridlines, a crosshair tooltip, and arrow keys to step through values.
 - **Case (`/algs/[id]`):**
-  - Top: breadcrumb (Library / set / group) and previous/next case links.
+  - Top: breadcrumb (puzzle, unless 3x3 / set / group) and previous/next case links. Other puzzles add a line under the group on what the step does.
   - Case image on the left (sticky on desktop). On the right: name, group, status toggle, your algorithm in large bold mono split into groups (`chunkAlg`: each trigger or chunk underlined, well-known triggers named beneath), a Your notes textarea (saved as you type, shown as the Drill hint), and a practice setup card.
   - Algorithms: a radio list, one row per algorithm, each algorithm underlined in groups like your algorithm (no names), with move count and "Default" or "Yours" tags. A filled square sticker (primary color) marks your main, echoing the progress board. Your own algorithms have Remove.
   - Add your own: a mono input. The algorithm is checked on the simulator. If it needs a turn of the top first, it is stored with that turn, and a toast says so.
@@ -82,13 +82,14 @@ shadcn (base-nova style, Base UI primitives) in `src/components/ui`. App pieces:
 
 - `cube-art.tsx`: `IsoCube` (isometric 3-face SVG) and `FlatFace` (3x3 button icon)
 - `theme-selector.tsx`: popover picker with the switch animation
+- `puzzle-select.tsx`: the puzzle select used by Library, Learn and Drill
 - `algs/`: `CaseImage`, `MoveSequence`, `StatusToggle`, `AlgCard`, `NotesField` (notes textarea shared by the case page, Learn and Drill)
 - `library-view.tsx`, `learn-view.tsx`, `drill-view.tsx`: page bodies
 - `backup-menu.tsx`: header backup popover
 - `timer/`: `TimerView`, `ScrambleNet`, `SessionStats`, `SolveList`, `SessionPicker`, `PenaltyToggle`, `CasePicker`
 - `analyze/`: `AnalyzeView`, charts (`TrendChart`, `HistogramChart`, `QQChart`, `GroupBarChart`) and test panels
 
-Case images are VisualCube SVGs in `public/cases/{id}.svg`, yellow top, green front, red right. OLL and PLL use the top-down plan view, and PLL images have arrows. F2L uses the isometric view so the front-right slot shows.
+Case images are SVGs in `public/cases/{id}.svg`, yellow top, green front, red right. 3x3 ones come from VisualCube: OLL and PLL use the top-down plan view, and PLL images have arrows. F2L uses the isometric view so the front-right slot shows. Every other puzzle's images are drawn in the same style by `scripts/case-svg.ts` from the simulators: plan views with grey for stickers that don't matter to the step and arrows when the case ends solved; 2x2 PBL shows the top and, beside it, the bottom as seen through the cube; cases that only touch the middle layer show the front face; the megaminx is its top pentagon with the side stickers around it.
 
 ## Quality floor
 

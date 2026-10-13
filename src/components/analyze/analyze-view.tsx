@@ -4,7 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { DownloadIcon, UploadIcon } from "lucide-react";
 import { toast } from "sonner";
-import { ALGS, ALGS_BY_ID, SETS } from "@/data/algs";
+import { ALGS, ALGS_BY_ID, caseLabel, fullSetLabel, SETS } from "@/data/algs";
 import { GroupBarChart, HistogramChart, Legend, QQChart, TrendChart, type Fit, type GroupBar, type TrendLine } from "@/components/analyze/charts";
 import { ChancesTest, CompareTest, NormalityTest, Panel, TrendTest, type Sample } from "@/components/analyze/tests";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -76,7 +76,7 @@ function timeGroups(at: number): Record<string, string> {
 function orderFor(dim: string, values: string[], samples: Sample[]): string[] {
   if (dim === "Time of day") return DAYPARTS.filter((v) => values.includes(v));
   if (dim === "Weekday") return WEEKDAYS.filter((v) => values.includes(v));
-  if (dim === "Set") return SETS.filter((v) => values.includes(v));
+  if (dim === "Set") return SETS.map(fullSetLabel).filter((v) => values.includes(v));
   if (dim === "OLL" || dim === "PLL") return [...ALGS.map((a) => a.name), NOT_SET].filter((v) => values.includes(v));
   // Everything else by first appearance, which is chronological for sessions and months.
   const first = new Map<string, number>();
@@ -263,8 +263,8 @@ function DrillAnalysis() {
             n: i + 1,
             title: `${alg?.name ?? a.id}, ${a.ok ? "got it" : "missed"}, ${dateTime.format(a.at)}`,
             groups: {
-              Set: alg?.set ?? "Unknown",
-              Case: alg ? `${alg.set} ${alg.name}` : a.id,
+              Set: alg ? fullSetLabel(alg.set) : "Unknown",
+              Case: alg ? caseLabel(alg) : a.id,
               Result: a.ok ? "Got it" : "Missed",
               Revealed: a.revealed ? "Revealed" : "Not revealed",
               ...timeGroups(a.at),
@@ -279,7 +279,10 @@ function DrillAnalysis() {
   if (!log.length) return <Empty text="No drills logged yet. Every Missed and Got it from a drill shows up here." href="/drill" action="Start a drill" />;
 
   const excluded = samples.filter((s) => s.excluded).length;
-  const caseItems = [{ value: "all", label: "All cases" }, ...cases.map((id) => ({ value: id, label: `${ALGS_BY_ID.get(id)?.set ?? ""} ${ALGS_BY_ID.get(id)?.name ?? id}` }))];
+  const caseItems = [{ value: "all", label: "All cases" }, ...cases.map((id) => {
+    const alg = ALGS_BY_ID.get(id);
+    return { value: id, label: alg ? caseLabel(alg) : id };
+  })];
 
   return (
     <>
@@ -287,7 +290,7 @@ function DrillAnalysis() {
         <FilterSelect
           label="Set"
           value={set}
-          items={[{ value: "all", label: "All sets" }, ...SETS.map((s) => ({ value: s, label: s }))]}
+          items={[{ value: "all", label: "All sets" }, ...SETS.filter((s) => log.some((a) => ALGS_BY_ID.get(a.id)?.set === s)).map((s) => ({ value: s, label: fullSetLabel(s) }))]}
           onChange={(v) => {
             setSet(v);
             setCaseId("all");
@@ -841,7 +844,7 @@ function CaseTable({ attempts }: { attempts: DrillAttempt[] }) {
               <tr key={r.id} className="border-b border-border last:border-0">
                 <td className="px-4 py-2 font-semibold">
                   <Link href={`/algs/${r.id}`} className="underline-offset-4 hover:underline">
-                    {r.alg ? `${r.alg.set} ${r.alg.name}` : r.id}
+                    {r.alg ? caseLabel(r.alg) : r.id}
                   </Link>
                 </td>
                 <td className="px-4 py-2">{r.count}</td>

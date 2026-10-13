@@ -1,66 +1,85 @@
 export type Move = {
-  /** Face, slice, wide or rotation letter: R, r, Rw, M, x, … */
+  /** Face, slice, wide or rotation letter: R, r, Rw, 3Rw, 2R, M, x, BR (megaminx), … */
   base: string;
-  /** Quarter turns clockwise: 1, 2 or 3 (3 = prime). */
-  turns: 1 | 2 | 3;
+  /** Turns clockwise: 1 to 3 on a cube (3 = prime), 1 to 4 on a megaminx (4 = prime). */
+  turns: number;
 };
 
-const MOVE_RE = /^([RLUDFBrludfbMESxyz]w?)(2|')?$/;
+/** The megaminx is the one puzzle whose faces turn in fifths, so its moves parse differently. */
+export type Notation = "cube" | "megaminx";
 
-export function parseAlg(alg: string): Move[] {
-  return alg
-    .replace(/[()[\]]/g, " ")
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((token) => {
-      // Tolerate "2'" and "'2" which some sources use for a half turn.
-      const normalized = token.replace(/2'|'2/, "2").replace("’", "'");
-      const match = MOVE_RE.exec(normalized);
-      if (!match) throw new Error(`Unknown move "${token}" in "${alg}"`);
-      const turns = match[2] === "2" ? 2 : match[2] === "'" ? 3 : 1;
-      return { base: match[1], turns };
-    });
+// Cubes: outer, wide (Rw, 3Rw, r), inner slice (2R), slice and rotation moves.
+const CUBE_RE = /^(\d?[RLUDFBrludfb]w|\d?[RLUDFB]|[rludfbMESxyz])(2|')?$/;
+// Megaminx: R2 is two fifths clockwise and R2' two fifths back, so "2'" is its own suffix.
+const MEGA_RE = /^(DBR|DBL|BR|BL|DR|DL|[URFLDB]|y)(2'|2|')?$/;
+
+const ORDER: Record<Notation, number> = { cube: 4, megaminx: 5 };
+
+/** Moves as written, one per token, with brackets dropped. */
+export function tokens(alg: string): string[] {
+  return alg.replace(/[()[\]]/g, " ").replace(/’/g, "'").split(/\s+/).filter(Boolean);
 }
 
-export function formatMove({ base, turns }: Move): string {
-  return base + (turns === 2 ? "2" : turns === 3 ? "'" : "");
+export function parseAlg(alg: string, notation: Notation = "cube"): Move[] {
+  const order = ORDER[notation];
+  return tokens(alg).map((token) => {
+    // Tolerate "2'" and "'2" which some sources use for a cube half turn.
+    const normalized = notation === "cube" ? token.replace(/2'|'2/, "2") : token;
+    const match = (notation === "cube" ? CUBE_RE : MEGA_RE).exec(normalized);
+    if (!match) throw new Error(`Unknown move "${token}" in "${alg}"`);
+    const suffix = match[2] ?? "";
+    const turns = suffix === "2" ? 2 : suffix === "2'" ? order - 2 : suffix === "'" ? order - 1 : 1;
+    return { base: match[1], turns };
+  });
 }
 
-export function formatAlg(moves: Move[]): string {
-  return moves.map(formatMove).join(" ");
+export function formatMove({ base, turns }: Move, notation: Notation = "cube"): string {
+  const order = ORDER[notation];
+  if (turns === 1) return base;
+  if (turns === 2) return `${base}2`;
+  if (turns === order - 1) return `${base}'`;
+  return `${base}2'`;
 }
 
-export function invertAlg(alg: string): string {
+export function formatAlg(moves: Move[], notation: Notation = "cube"): string {
+  return moves.map((m) => formatMove(m, notation)).join(" ");
+}
+
+export function invertAlg(alg: string, notation: Notation = "cube"): string {
+  const order = ORDER[notation];
   return formatAlg(
-    parseAlg(alg)
+    parseAlg(alg, notation)
       .reverse()
-      .map((m) => ({ base: m.base, turns: (4 - m.turns) as 1 | 2 | 3 })),
+      .map((m) => ({ base: m.base, turns: order - m.turns })),
+    notation,
   );
 }
 
+/** The moves of an algorithm, one string each, the way they're written. */
 export function splitMoves(alg: string): string[] {
-  return formatAlg(parseAlg(alg)).split(" ");
+  return tokens(alg);
 }
 
 /** Merge neighbouring turns of the same layer: "U U2" → "U'", "R R'" → "". */
-export function simplifyAlg(alg: string): string {
+export function simplifyAlg(alg: string, notation: Notation = "cube"): string {
+  const order = ORDER[notation];
   const out: Move[] = [];
-  for (const move of parseAlg(alg)) {
+  for (const move of parseAlg(alg, notation)) {
     const last = out.at(-1);
     if (last && last.base === move.base) {
-      const turns = (last.turns + move.turns) % 4;
+      const turns = (last.turns + move.turns) % order;
       if (turns === 0) out.pop();
-      else last.turns = turns as 1 | 2 | 3;
+      else last.turns = turns;
     } else {
       out.push({ ...move });
     }
   }
-  return formatAlg(out);
+  return formatAlg(out, notation);
 }
 
-/** Number of turns, not counting whole-cube rotations. */
+/** Number of turns, not counting whole-puzzle rotations. */
 export function moveCount(alg: string): number {
-  return parseAlg(alg).filter((m) => !/^[xyz]/.test(m.base)).length;
+  return tokens(alg).filter((m) => !/^[xyz]/.test(m)).length;
 }
 
 /**
@@ -86,12 +105,20 @@ const MIRRORS: Record<"M" | "FR", Record<string, [string, boolean]>> = {
   },
 };
 
-export function mirrorAlg(alg: string, plane: "M" | "FR"): string {
+// Megaminx: left for right, every turn reversed.
+const MEGA_MIRROR: Record<string, string> = {
+  U: "U", F: "F", D: "D", B: "B", R: "L", L: "R", BR: "BL", BL: "BR", DR: "DL", DL: "DR", DBR: "DBL", DBL: "DBR", y: "y",
+};
+
+export function mirrorAlg(alg: string, plane: "M" | "FR", notation: Notation = "cube"): string {
+  if (notation === "megaminx") {
+    return formatAlg(parseAlg(alg, notation).map(({ base, turns }) => ({ base: MEGA_MIRROR[base], turns: 5 - turns })), notation);
+  }
   return formatAlg(
     parseAlg(alg).map(({ base, turns }) => {
-      const wide = base.endsWith("w");
-      const [next, flip] = MIRRORS[plane][base[0]];
-      return { base: next + (wide ? "w" : ""), turns: flip ? ((4 - turns) as 1 | 2 | 3) : turns };
+      const [, layers = "", letter, wide = ""] = /^(\d?)([A-Za-z])(w?)$/.exec(base)!;
+      const [next, flip] = MIRRORS[plane][letter];
+      return { base: layers + next + wide, turns: flip ? 4 - turns : turns };
     }),
   );
 }
@@ -133,16 +160,16 @@ export function faceTurnsOnly(alg: string): string {
   let frame: Record<string, string> = { R: "R", L: "L", U: "U", D: "D", F: "F", B: "B" };
   const out: Move[] = [];
   const push = (base: string, turns: number) => {
-    turns %= 4;
+    turns = ((turns % 4) + 4) % 4;
     if (!turns) return;
     let i = out.length - 1;
     if (i >= 0 && out[i].base !== base && out[i].base === OPPOSITE[base]) i--;
     if (i >= 0 && out[i].base === base) {
       const sum = (out[i].turns + turns) % 4;
       if (sum === 0) out.splice(i, 1);
-      else out[i].turns = sum as 1 | 2 | 3;
+      else out[i].turns = sum;
     } else {
-      out.push({ base, turns: turns as 1 | 2 | 3 });
+      out.push({ base, turns });
     }
   };
   for (const { base, turns } of parseAlg(alg)) {
@@ -160,6 +187,31 @@ export function faceTurnsOnly(alg: string): string {
       const from = ROTATION_FROM[axis];
       frame = Object.fromEntries(Object.keys(frame).map((f) => [f, frame[from[f]]]));
     }
+  }
+  return formatAlg(out);
+}
+
+/**
+ * Any cube's alg with the rotations (x, y, z) taken out: the moves after one
+ * are renamed to the faces they now point at. Wide and slice moves stay as
+ * they are, so this works on a 4x4 where `faceTurnsOnly` would not.
+ */
+export function withoutRotations(alg: string): string {
+  let frame: Record<string, string> = { R: "R", L: "L", U: "U", D: "D", F: "F", B: "B" };
+  const out: Move[] = [];
+  for (const { base, turns } of parseAlg(alg)) {
+    if (/^[xyz]$/.test(base)) {
+      for (let q = 0; q < turns; q++) {
+        const from = ROTATION_FROM[base as "x" | "y" | "z"];
+        frame = Object.fromEntries(Object.keys(frame).map((f) => [f, frame[from[f]]]));
+      }
+      continue;
+    }
+    if (/^[MES]$/.test(base)) throw new Error("Slice moves need a rotation-aware rewrite");
+    const m = /^(\d?)([A-Za-z])(w?)$/.exec(base)!;
+    const lower = m[2] !== m[2].toUpperCase();
+    const face = frame[m[2].toUpperCase()];
+    out.push({ base: m[1] + (lower ? face.toLowerCase() : face) + m[3], turns });
   }
   return formatAlg(out);
 }
