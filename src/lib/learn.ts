@@ -1,4 +1,4 @@
-import { ALGS, ALGS_BY_ID, type Alg, type AlgSet } from "@/data/algs";
+import { ALGS, ALGS_BY_ID, GROUPS, type Alg, type AlgSet } from "@/data/algs";
 import { createStore } from "./store";
 
 /** Clean recalls in a row, with no peeking, before a case counts as solid. */
@@ -44,9 +44,35 @@ type Cluster = { ids: string[]; why: string };
 const byGroup = (set: AlgSet, groups: string[], why: (group: string) => string): Cluster[] =>
   groups.map((g) => ({ ids: ALGS.filter((a) => a.set === set && a.group === g).map((a) => a.id), why: why(g) }));
 
+/** One cluster per group, in the set's own order. */
+const groupsOf = (set: AlgSet, why: (group: string) => string): Cluster[] => byGroup(set, GROUPS[set], why);
+
 // Cases that belong together, easiest first. Batches never mix two clusters
 // unless both fit whole.
 const CLUSTERS: Record<AlgSet, Cluster[]> = {
+  "2x2-OLL": [
+    { ids: ["2x2-oll-sune", "2x2-oll-antisune"], why: "Sune and Antisune: the same triggers, and the ones you'll see most" },
+    { ids: ["2x2-oll-u", "2x2-oll-t", "2x2-oll-l"], why: "Two corners oriented: tell them apart by where the yellow stickers point" },
+    { ids: ["2x2-oll-h", "2x2-oll-pi"], why: "No corners oriented: H has two pairs of headlights, Pi one" },
+  ],
+  "2x2-PBL": [
+    { ids: ["2x2-pbl-adj-top", "2x2-pbl-diag-top"], why: "Top layer only: the 3x3 T and Y perms work here" },
+    { ids: ["2x2-pbl-diag-diag", "2x2-pbl-adj-adj"], why: "The same swap on both layers: short and easy to spot" },
+    { ids: ["2x2-pbl-adj-diag", "2x2-pbl-diag-adj"], why: "One adjacent and one diagonal swap: a pair to learn side by side" },
+    { ids: ["2x2-pbl-adj-bottom", "2x2-pbl-diag-bottom"], why: "Bottom layer only: the top is solved, so check the bottom before you start" },
+  ],
+  "4x4-parity": [
+    { ids: ["4x4-oll-parity", "4x4-pll-opp", "4x4-pll-adj"], why: "The parities you meet in most solves: one flipped edge, or two edges swapped" },
+    { ids: ["4x4-pll-oa", "4x4-pll-ob"], why: "Four edges cycling: a mirror pair" },
+    { ids: ["4x4-pll-adj-corners", "4x4-pll-diag-corners"], why: "Two corners swapped: rarer, and you can also fix them with PLL parity and a 3x3 PLL" },
+  ],
+  "5x5-edges": groupsOf("5x5-edges", (g) => (g === "Parity" ? "Edge parity: the wing swaps a 3x3 can't have" : "Wing swaps without parity")),
+  "6x6-parity": groupsOf("6x6-parity", (g) => `${g}: the same alg for each ring of wings, turning a different slice`),
+  "7x7-parity": groupsOf("7x7-parity", () => "One alg for both rings of wings: only the slice changes"),
+  "mega-EO": groupsOf("mega-EO", (g) => `${g}: built on F sexy F'`),
+  "mega-CO": groupsOf("mega-CO", (g) => `${g}: mostly Sune shapes, learned side by side`),
+  "mega-EP": groupsOf("mega-EP", (g) => `${g} of edges`),
+  "mega-CP": groupsOf("mega-CP", (g) => `${g} of corners`),
   PLL: [
     { ids: ["pll-ua", "pll-ub", "pll-h", "pll-z"], why: "Edges only: short M-slice algorithms and easy to spot" },
     { ids: ["pll-t", "pll-jb", "pll-ja", "pll-y"], why: "Built from the sexy move and sledgehammer, and used all the time" },

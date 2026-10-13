@@ -1,9 +1,11 @@
-import type { AlgSet } from "@/lib/cases";
+import { ALL_SETS, PUZZLE_NAMES, PUZZLES, SET_INFO, setsOf, type AlgSet, type Puzzle } from "@/lib/puzzles";
+import { PUZZLE_ALGS } from "./puzzle-algs";
 
-export type { AlgSet };
+export type { AlgSet, Puzzle };
 
 export type Alg = {
   id: string;
+  puzzle: Puzzle;
   set: AlgSet;
   name: string;
   group: string;
@@ -1209,29 +1211,37 @@ const pll: [string, string, string[]][] = [
 ];
 
 export const ALGS: Alg[] = [
-  ...f2l.map(([n, group, algs]) => ({ id: `f2l-${n}`, set: "F2L" as const, name: `F2L ${n}`, group, algs })),
-  ...oll.map(([n, group, algs]) => ({ id: `oll-${n}`, set: "OLL" as const, name: `OLL ${n}`, group, algs })),
+  ...f2l.map(([n, group, algs]) => ({ id: `f2l-${n}`, puzzle: "3x3" as const, set: "F2L" as const, name: `F2L ${n}`, group, algs })),
+  ...oll.map(([n, group, algs]) => ({ id: `oll-${n}`, puzzle: "3x3" as const, set: "OLL" as const, name: `OLL ${n}`, group, algs })),
   ...pll.map(([n, group, algs]) => ({
     id: `pll-${n.toLowerCase()}`,
+    puzzle: "3x3" as const,
     set: "PLL" as const,
     name: `${n} perm`,
     group,
     algs,
   })),
+  ...PUZZLE_ALGS.map((a) => ({ ...a, puzzle: SET_INFO[a.set].puzzle })),
 ];
 
 export const ALGS_BY_ID = new Map(ALGS.map((a) => [a.id, a]));
 
-export const SETS: AlgSet[] = ["F2L", "OLL", "PLL"];
+/** Every set, puzzle by puzzle. */
+export const SETS: AlgSet[] = PUZZLES.flatMap(setsOf);
 
-export const SET_TITLES: Record<AlgSet, string> = {
-  F2L: "First two layers",
-  OLL: "Orient the last layer",
-  PLL: "Permute the last layer",
-};
+export const SET_TITLES = Object.fromEntries(ALL_SETS.map((s) => [s, SET_INFO[s].title])) as Record<AlgSet, string>;
 
-export const GROUPS: Record<AlgSet, string[]> = {
-  F2L: ["White facing up", "White facing side", "Corner in slot", "Edge in slot", "Both in slot"],
-  OLL: [...new Set(oll.map(([, g]) => g))],
-  PLL: [...new Set(pll.map(([, g]) => g))],
-};
+const F2L_GROUPS = ["White facing up", "White facing side", "Corner in slot", "Edge in slot", "Both in slot"];
+
+/** Groups in each set, in the order the Library shows them. */
+export const GROUPS = Object.fromEntries(
+  ALL_SETS.map((s) => [s, s === "F2L" ? F2L_GROUPS : [...new Set(ALGS.filter((a) => a.set === s).map((a) => a.group))]]),
+) as Record<AlgSet, string[]>;
+
+export const algsOf = (puzzle: Puzzle) => ALGS.filter((a) => a.puzzle === puzzle);
+
+/** A set's name with its puzzle, for lists that mix puzzles: "OLL", "2x2 PBL", "Megaminx CO". */
+export const fullSetLabel = (set: AlgSet) => (SET_INFO[set].puzzle === "3x3" ? set : `${PUZZLE_NAMES[SET_INFO[set].puzzle]} ${SET_INFO[set].label}`);
+
+/** A case's name for lists that mix sets and puzzles. */
+export const caseLabel = (alg: Alg) => `${fullSetLabel(alg.set)} ${alg.name}`;

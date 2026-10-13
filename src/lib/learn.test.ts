@@ -39,6 +39,8 @@ describe("chunks", () => {
     expect(chunkAlg("R U R' U' R' F R F'").map((c) => c.name)).toEqual(["Sexy move", "Sledgehammer"]);
     expect(chunkAlg("R U R' U R U2 R'")[0].name).toBe("Sune");
     expect(chunkAlg("L' U' L U")[0].name).toBe("Left sexy move");
+    expect(chunkAlg("R U R' U R U2 R'", "megaminx").some((c) => c.name === "Sune")).toBe(false);
+    expect(chunkAlg("R U R' U' F", "megaminx")[0].name).toBe("Sexy move");
   });
 
   test("Antisune is Sune's inverse and Na/Nb are mirrors", () => {

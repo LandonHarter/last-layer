@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowRightIcon, CheckIcon, EyeIcon, LightbulbIcon, RefreshCwIcon, RotateCcwIcon, SkipForwardIcon } from "lucide-react";
 import { toast } from "sonner";
-import { ALGS, ALGS_BY_ID, SETS, type Alg, type AlgSet } from "@/data/algs";
+import { ALGS, ALGS_BY_ID, type Alg, type AlgSet } from "@/data/algs";
+import { PuzzleSelect } from "@/components/puzzle-select";
 import { CaseImage } from "@/components/algs/case-image";
 import { MoveSequence } from "@/components/algs/move-sequence";
 import { NotesField } from "@/components/algs/notes-field";
@@ -30,6 +31,8 @@ import { moveCount } from "@/lib/notation";
 import { allAlgs, entryFor, getProgress, mainAlg, recordAttempt, setMain, setStatus, useProgress, type Progress } from "@/lib/progress";
 import { makeSetup } from "@/lib/setup";
 import { logDrillAttempt } from "@/lib/solves";
+import { setPuzzle, usePuzzle } from "@/lib/puzzle-choice";
+import { HOLD, notationOf, PUZZLE_NAMES, SET_INFO, setLabel, setsOf, type Puzzle } from "@/lib/puzzles";
 import { chunkAlg, describeAlg, memoryTips, type Chunk } from "@/lib/triggers";
 import { cn } from "@/lib/utils";
 
@@ -39,9 +42,14 @@ const SIZES = [3, 4, 5, 6];
 export function LearnView() {
   const data = useLearn();
   const progress = useProgress();
+  const puzzle = usePuzzle();
   // The batch being worked on; kept here so the finished screen outlives the stored batch.
   const [session, setSession] = useState<string[] | null>(null);
-  const set = data.set;
+  // The stored set belongs to the puzzle you picked; when the puzzle changed elsewhere, start on its first set.
+  const set = SET_INFO[data.set]?.puzzle === puzzle ? data.set : setsOf(puzzle)[0];
+  useEffect(() => {
+    if (set !== data.set) updateLearn((d) => ({ ...d, set }));
+  }, [set, data.set]);
   const learned = (id: string) => entryFor(progress, id).status === "learned";
   // Cases you've marked Learned drop out of the batch.
   const stored = data.batch[set]?.filter((id) => !learned(id));
@@ -52,6 +60,11 @@ export function LearnView() {
   const plan = planBatches(set, data.size, (id) => learned(id) || !!batch?.includes(id));
   const total = ALGS.filter((a) => a.set === set).length;
   const done = ALGS.filter((a) => a.set === set && learned(a.id)).length;
+
+  function choosePuzzle(next: Puzzle) {
+    setPuzzle(next);
+    updateLearn((d) => ({ ...d, set: setsOf(next)[0] }));
+  }
 
   function start(ids: string[]) {
     updateLearn((d) => ({
@@ -74,19 +87,22 @@ export function LearnView() {
       </div>
 
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-        <ToggleGroup
-          value={[set]}
-          onValueChange={(v) => v[0] && updateLearn((d) => ({ ...d, set: v[0] as AlgSet }))}
-          variant="outline"
-          spacing={0}
-          aria-label="Algorithm set"
-        >
-          {SETS.map((s) => (
-            <ToggleGroupItem key={s} value={s} className={TOGGLE_ITEM}>
-              {s}
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
+        <div className="flex flex-wrap items-center gap-2">
+          <PuzzleSelect value={puzzle} onChange={(p: Puzzle) => choosePuzzle(p)} />
+          <ToggleGroup
+            value={[set]}
+            onValueChange={(v) => v[0] && updateLearn((d) => ({ ...d, set: v[0] as AlgSet }))}
+            variant="outline"
+            spacing={0}
+            aria-label="Algorithm set"
+          >
+            {setsOf(puzzle).map((s) => (
+              <ToggleGroupItem key={s} value={s} className={TOGGLE_ITEM}>
+                {setLabel(s)}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        </div>
         <div className="flex items-center gap-3">
           <span id="size-label" className="text-sm text-muted-foreground">
             Cases per batch
@@ -146,7 +162,9 @@ export function LearnView() {
           </p>
         </div>
         {plan.length === 0 ? (
-          <p className="text-muted-foreground">Every {set} case is learned or in your batch. Nice work.</p>
+          <p className="text-muted-foreground">
+            Every {PUZZLE_NAMES[puzzle]} {setLabel(set)} case is learned or in your batch. Nice work.
+          </p>
         ) : (
           <ol className="flex flex-col gap-3">
             {plan.map((b, i) => (
@@ -516,7 +534,7 @@ function PickStep({ alg, progress }: { alg: Alg; progress: Progress }) {
           const isTrying = trying?.alg === a;
           return (
             <li key={a} className={cn("flex flex-col gap-3 rounded-xl border p-4", a === main ? "border-primary" : "border-border")}>
-              <ChunkedAlg chunks={chunkAlg(a)} className="text-[0.95rem]" />
+              <ChunkedAlg chunks={chunkAlg(a, notationOf(alg.set))} className="text-[0.95rem]" />
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                 {a === main && entry.main && <span className="font-semibold text-primary">Your algorithm</span>}
                 {a === alg.algs[0] && <span className="font-semibold text-foreground">Default</span>}
@@ -528,7 +546,7 @@ function PickStep({ alg, progress }: { alg: Alg; progress: Progress }) {
               </div>
               {isTrying && (
                 <div className="rounded-lg bg-muted p-3">
-                  <p className="mb-1 text-xs text-muted-foreground">Set up from solved, yellow on top, green in front, then try it:</p>
+                  <p className="mb-1 text-xs text-muted-foreground">Set up from solved, {HOLD[alg.puzzle]}, then try it:</p>
                   <MoveSequence alg={trying.setup} className="text-sm" />
                 </div>
               )}
@@ -571,12 +589,12 @@ function useSetup(alg: Alg, main: string) {
   return [setup, () => setSetup(makeSetup(alg, main))] as const;
 }
 
-function SetupLine({ setup, reroll }: { setup: string | null; reroll: () => void }) {
+function SetupLine({ setup, reroll, puzzle }: { setup: string | null; reroll: () => void; puzzle: Puzzle }) {
   return (
     <section aria-labelledby="setup-label">
       <div className="mb-1 flex items-center justify-between gap-3">
         <h3 id="setup-label" className="text-sm font-semibold text-muted-foreground">
-          Set up from solved, yellow on top, green in front
+          Set up from solved, {HOLD[puzzle]}
         </h3>
         <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={reroll}>
           <RefreshCwIcon data-icon="inline-start" />
@@ -589,7 +607,7 @@ function SetupLine({ setup, reroll }: { setup: string | null; reroll: () => void
 }
 
 function StudyStep({ alg, main, progress, batch, onDone }: { alg: Alg; main: string; progress: Progress; batch: string[]; onDone: () => void }) {
-  const chunks = useMemo(() => chunkAlg(main), [main]);
+  const chunks = useMemo(() => chunkAlg(main, notationOf(alg.set)), [main, alg.set]);
   const [step, setStep] = useState(0);
   const [phase, setPhase] = useState<"walk" | "memory">("walk");
   const [peeked, setPeeked] = useState<Set<number>>(new Set());
@@ -624,7 +642,7 @@ function StudyStep({ alg, main, progress, batch, onDone }: { alg: Alg; main: str
         </p>
       </div>
 
-      <SetupLine setup={setup} reroll={reroll} />
+      <SetupLine setup={setup} reroll={reroll} puzzle={alg.puzzle} />
 
       {phase === "walk" ? (
         <>
@@ -723,7 +741,7 @@ function RecallStep({ alg, main, streak, onNext }: { alg: Alg; main: string; str
   const [setup, reroll] = useSetup(alg, main);
   const [shown, setShown] = useState(false);
   const [shownAt] = useState(() => performance.now());
-  const chunks = useMemo(() => chunkAlg(main), [main]);
+  const chunks = useMemo(() => chunkAlg(main, notationOf(alg.set)), [main, alg.set]);
 
   const answer = useCallback(
     (ok: boolean) => {
@@ -773,7 +791,7 @@ function RecallStep({ alg, main, streak, onNext }: { alg: Alg; main: string; str
         <StreakDots streak={streak} className="[&>span]:size-3" />
       </div>
 
-      <SetupLine setup={setup} reroll={reroll} />
+      <SetupLine setup={setup} reroll={reroll} puzzle={alg.puzzle} />
 
       {shown ? (
         <div className="flex flex-col gap-4 animate-in duration-200 fade-in-0">

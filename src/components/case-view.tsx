@@ -12,8 +12,9 @@ import { StatusToggle } from "@/components/algs/status-toggle";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { fitAlg, isValidNotation } from "@/lib/cases";
-import { moveCount } from "@/lib/notation";
+import { moveCount, type Notation } from "@/lib/notation";
 import { addCustom, allAlgs, entryFor, mainAlg, removeCustom, setMain, useProgress } from "@/lib/progress";
+import { EXAMPLE_ALG, HOLD, notationOf, PUZZLE_NAMES, SET_INFO, setLabel } from "@/lib/puzzles";
 import { makeSetup } from "@/lib/setup";
 import { cn } from "@/lib/utils";
 
@@ -34,12 +35,17 @@ export function CaseView({ id }: { id: string }) {
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-4 py-6 sm:px-6 md:py-10">
       <nav className="flex flex-wrap items-center justify-between gap-3 text-sm" aria-label="Cases">
         <div className="flex items-center gap-2">
-          <Link href="/" className={buttonVariants({ variant: "outline" })}>
+          <Link href={alg.puzzle === "3x3" ? "/" : `/?puzzle=${alg.puzzle}`} className={buttonVariants({ variant: "outline" })}>
             <ArrowLeftIcon data-icon="inline-start" />
             Back to library
           </Link>
           <p className="text-muted-foreground">
-            {alg.set} <span aria-hidden>/</span> {alg.group}
+            {alg.puzzle !== "3x3" && (
+              <>
+                {PUZZLE_NAMES[alg.puzzle]} <span aria-hidden>/</span>{" "}
+              </>
+            )}
+            {setLabel(alg.set)} <span aria-hidden>/</span> {alg.group}
           </p>
         </div>
         <div className="flex gap-1">
@@ -72,6 +78,7 @@ export function CaseView({ id }: { id: string }) {
                 )}
               </p>
             </div>
+            {alg.puzzle !== "3x3" && <p className="max-w-prose text-sm text-muted-foreground">{SET_INFO[alg.set].blurb}</p>}
             <StatusToggle id={alg.id} status={entry.status} size="default" className="max-w-md" />
           </header>
 
@@ -83,6 +90,7 @@ export function CaseView({ id }: { id: string }) {
               key={main}
               alg={main}
               grouped="labeled"
+              notation={notationOf(alg.set)}
               className="animate-in text-[clamp(1.4rem,3vw,2.2rem)] leading-tight font-bold duration-200 fade-in-0"
             />
           </section>
@@ -119,6 +127,7 @@ export function CaseView({ id }: { id: string }) {
               selected={a === main}
               isDefault={a === alg.algs[0]}
               isCustom={custom.has(a)}
+              notation={notationOf(alg.set)}
               onSelect={() => setMain(alg.id, a)}
               onRemove={() => {
                 removeCustom(alg.id, a);
@@ -157,7 +166,7 @@ function PracticeSetup({ alg, main }: { alg: Alg; main: string }) {
     <section aria-labelledby="setup-label" className="rounded-xl border border-border bg-card p-5">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 id="setup-label" className="text-sm font-semibold text-muted-foreground">
-          Practice setup: from solved, yellow on top, green in front
+          Practice setup: from solved, {HOLD[alg.puzzle]}
         </h2>
         <Button variant="ghost" size="sm" onClick={() => setSetup(makeSetup(alg, main))}>
           <RefreshCwIcon data-icon="inline-start" />
@@ -178,6 +187,7 @@ function AlgOption({
   selected,
   isDefault,
   isCustom,
+  notation,
   onSelect,
   onRemove,
 }: {
@@ -185,6 +195,7 @@ function AlgOption({
   selected: boolean;
   isDefault: boolean;
   isCustom: boolean;
+  notation: Notation;
   onSelect: () => void;
   onRemove: () => void;
 }) {
@@ -206,7 +217,7 @@ function AlgOption({
             selected ? "bg-primary ring-primary" : "ring-foreground/25",
           )}
         />
-        <MoveSequence alg={alg} grouped className={cn("min-w-0 flex-1 text-[0.95rem] leading-snug", selected && "font-bold")} />
+        <MoveSequence alg={alg} grouped notation={notation} className={cn("min-w-0 flex-1 text-[0.95rem] leading-snug", selected && "font-bold")} />
         <span className="flex shrink-0 flex-col items-end text-xs text-muted-foreground sm:flex-row sm:gap-3">
           {isCustom && <span className="font-semibold text-foreground">Yours</span>}
           {isDefault && !isCustom && <span>Default</span>}
@@ -222,6 +233,16 @@ function AlgOption({
   );
 }
 
+const NOTATION_HINT: Record<Alg["puzzle"], string> = {
+  "2x2": "Use outer turns like R U R' U2, and x, y, z.",
+  "3x3": "Use moves like R U R' U2, M, r, x.",
+  "4x4": "Use moves like R U2, Rw or r (two layers), 3Rw, 2R (the inner slice alone), x.",
+  "5x5": "Use moves like R U2, Rw or r (two layers), 3Rw, 2R (the second slice alone), M, x.",
+  "6x6": "Use moves like R U2, Rw (two layers), 3Rw, 2R or 3R (one inner slice), x.",
+  "7x7": "Use moves like R U2, Rw (two layers), 3Rw, 2R or 3R (one inner slice), M, x.",
+  megaminx: "Use faces U, F, R, L, BR, BL (and DR, DL, D, B …); R2 is two fifths clockwise and R2' two fifths back.",
+};
+
 function AddCustom({ alg, existing }: { alg: Alg; existing: string[] }) {
   const [value, setValue] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -230,13 +251,13 @@ function AddCustom({ alg, existing }: { alg: Alg; existing: string[] }) {
     e.preventDefault();
     const input = value.trim();
     if (!input) return;
-    if (!isValidNotation(input)) {
-      return setError("Some of those moves aren't notation this app reads. Use moves like R U R' U2, M, r, x.");
+    if (!isValidNotation(input, alg.set)) {
+      return setError(`Some of those moves aren't notation this app reads for the ${PUZZLE_NAMES[alg.puzzle]}. ${NOTATION_HINT[alg.puzzle]}`);
     }
-    const fitted = fitAlg(alg.set, alg.algs[0], input);
+    const fitted = fitAlg(alg, input);
     if (!fitted) {
       return setError(
-        `That doesn't solve ${alg.name}${alg.set === "F2L" ? " into the front-right slot" : ""}, or it turns the whole cube. Try it on the practice setup above.`,
+        `That doesn't solve ${alg.name}${alg.set === "F2L" ? " into the front-right slot" : ""}, or it turns the whole ${alg.puzzle === "megaminx" ? "puzzle" : "cube"}. Try it on the practice setup above.`,
       );
     }
     if (existing.includes(fitted)) return setError("That one is already in the list.");
@@ -262,7 +283,7 @@ function AddCustom({ alg, existing }: { alg: Alg; existing: string[] }) {
             setValue(e.target.value);
             setError(null);
           }}
-          placeholder="R U R' U R U2 R'"
+          placeholder={EXAMPLE_ALG[alg.puzzle]}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? "custom-alg-error" : "custom-alg-hint"}
           autoComplete="off"
@@ -279,7 +300,7 @@ function AddCustom({ alg, existing }: { alg: Alg; existing: string[] }) {
         </p>
       ) : (
         <p id="custom-alg-hint" className="text-sm text-muted-foreground">
-          It&apos;s checked on a simulated cube before it&apos;s added. A turn of the top at the start is fine.
+          It&apos;s checked on a simulated {alg.puzzle === "megaminx" ? "megaminx" : "cube"} before it&apos;s added. A turn of the top at the start is fine.
         </p>
       )}
     </form>

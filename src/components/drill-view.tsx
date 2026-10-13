@@ -5,6 +5,7 @@ import { LightbulbIcon, PencilIcon, RefreshCwIcon } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { ALGS, ALGS_BY_ID, SETS, type AlgSet } from "@/data/algs";
+import { PuzzleSelect } from "@/components/puzzle-select";
 import { CaseImage } from "@/components/algs/case-image";
 import { MoveSequence } from "@/components/algs/move-sequence";
 import { NotesField } from "@/components/algs/notes-field";
@@ -16,10 +17,13 @@ import { entryFor, getProgress, mainAlg, recordAttempt, setStatus, useProgress, 
 import { pickNext, STATUS_WEIGHT } from "@/lib/scheduler";
 import { makeSetup } from "@/lib/setup";
 import { logDrillAttempt } from "@/lib/solves";
+import { setPuzzle, usePuzzle } from "@/lib/puzzle-choice";
+import { HOLD, PUZZLE_NAMES, setLabel, setsOf, type Puzzle } from "@/lib/puzzles";
 import { createStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
 type StatusFilter = "learning" | "learned" | "both";
+/** Sets you've picked, across every puzzle, so each puzzle remembers its own. */
 type DrillFilter = { sets: AlgSet[]; status: StatusFilter };
 
 const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
@@ -41,10 +45,20 @@ function poolFor(progress: Progress, filter: DrillFilter) {
   return startedIn(progress, filter.sets).filter((p) => filter.status === "both" || p.entry.status === filter.status);
 }
 
+/** The filter narrowed to one puzzle: its picked sets, or all of them if none is picked. */
+function forPuzzle(filter: DrillFilter, puzzle: Puzzle): DrillFilter {
+  const own = setsOf(puzzle);
+  const picked = own.filter((s) => filter.sets.includes(s));
+  return { ...filter, sets: picked.length ? picked : own };
+}
+
 export function DrillView() {
   const progress = useProgress();
-  const filter = filterStore.use();
+  const puzzle = usePuzzle();
+  const stored = filterStore.use();
+  const filter = forPuzzle(stored, puzzle);
   const [session, setSession] = useState<SessionState | null>(null);
+  const puzzleSets = setsOf(puzzle);
 
   const pool = poolFor(progress, filter);
   const started = startedIn(progress, filter.sets);
@@ -75,18 +89,27 @@ export function DrillView() {
 
       <div className="flex flex-col gap-5 rounded-xl border border-border bg-card p-5 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
+          <span className="text-sm font-semibold">Puzzle</span>
+          <PuzzleSelect value={puzzle} onChange={setPuzzle} />
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <span className="text-sm font-semibold">Sets</span>
           <ToggleGroup
             multiple
             value={filter.sets}
-            onValueChange={(v) => v.length > 0 && filterStore.write({ ...filter, sets: SETS.filter((s) => v.includes(s)) })}
+            onValueChange={(v) =>
+              v.length > 0 &&
+              // Keep the other puzzles' picks as they were.
+              filterStore.write({ ...stored, sets: SETS.filter((s) => (puzzleSets.includes(s) ? v.includes(s) : stored.sets.includes(s))) })
+            }
             variant="outline"
             spacing={0}
             aria-label="Algorithm sets"
           >
-            {SETS.map((s) => (
+            {puzzleSets.map((s) => (
               <ToggleGroupItem key={s} value={s} className="px-3 font-semibold aria-pressed:bg-foreground aria-pressed:text-background">
-                {s}
+                {setLabel(s)}
               </ToggleGroupItem>
             ))}
           </ToggleGroup>
@@ -96,7 +119,7 @@ export function DrillView() {
           <span className="text-sm font-semibold">Cases</span>
           <ToggleGroup
             value={[filter.status]}
-            onValueChange={(v) => v[0] && filterStore.write({ ...filter, status: v[0] as StatusFilter })}
+            onValueChange={(v) => v[0] && filterStore.write({ ...stored, status: v[0] as StatusFilter })}
             variant="outline"
             spacing={0}
             aria-label="Which cases to drill"
@@ -128,8 +151,8 @@ export function DrillView() {
           <div className="flex flex-col items-start gap-3">
             <p className="text-sm text-muted-foreground">
               {started.length > 0
-                ? `No ${filter.status === "learning" ? "In progress" : "Learned"} cases in ${filter.sets.join(", ")}. Pick another option above, or mark algorithms in the Library.`
-                : "Nothing to drill yet. Mark algorithms as In progress or Learned in the Library and they'll show up here."}
+                ? `No ${filter.status === "learning" ? "In progress" : "Learned"} ${PUZZLE_NAMES[puzzle]} cases in ${filter.sets.map(setLabel).join(", ")}. Pick another option above, or mark algorithms in the Library.`
+                : `Nothing to drill on the ${PUZZLE_NAMES[puzzle]} yet. Mark algorithms as In progress or Learned in the Library and they'll show up here.`}
             </p>
             <Link href="/" className={buttonVariants({ size: "lg" })}>
               Open the Library
@@ -259,7 +282,7 @@ function Session({
           <section aria-labelledby="setup-label">
             <div className="mb-2 flex items-center justify-between gap-3">
               <h2 id="setup-label" className="text-sm font-semibold text-muted-foreground">
-                Set up from solved, yellow on top, green in front
+                Set up from solved, {HOLD[alg.puzzle]}
               </h2>
               <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={reroll}>
                 <RefreshCwIcon data-icon="inline-start" />
