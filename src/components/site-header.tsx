@@ -3,23 +3,26 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Grid3x3Icon, TimerIcon } from "lucide-react";
+import { BookOpenIcon, ChartLineIcon, GraduationCapIcon, Grid3x3Icon, TargetIcon, TimerIcon, WrenchIcon, type LucideIcon } from "lucide-react";
 import { AccountMenu } from "@/components/account-menu";
 import { BackupMenu } from "@/components/backup-menu";
 import { ThemeSelector } from "@/components/theme-selector";
 import { MODE_HOME, modeForPath, setStoredMode, useStoredMode, type Mode } from "@/lib/mode";
 import { cn } from "@/lib/utils";
 
-const NAV: Record<Mode, { href: string; label: string }[]> = {
+// Below sm the nav shows icons only, so the header fits a phone.
+const NAV: Record<Mode, { href: string; label: string; Icon: LucideIcon }[]> = {
   algs: [
-    { href: "/", label: "Library" },
-    { href: "/learn", label: "Learn" },
-    { href: "/drill", label: "Drill" },
-    { href: "/analyze", label: "Analyze" },
+    { href: "/", label: "Library", Icon: BookOpenIcon },
+    { href: "/learn", label: "Learn", Icon: GraduationCapIcon },
+    { href: "/drill", label: "Drill", Icon: TargetIcon },
+    { href: "/analyze", label: "Analyze", Icon: ChartLineIcon },
+    { href: "/tools", label: "Tools", Icon: WrenchIcon },
   ],
   timer: [
-    { href: "/timer", label: "Timer" },
-    { href: "/analyze", label: "Analyze" },
+    { href: "/timer", label: "Timer", Icon: TimerIcon },
+    { href: "/analyze", label: "Analyze", Icon: ChartLineIcon },
+    { href: "/tools", label: "Tools", Icon: WrenchIcon },
   ],
 };
 
@@ -80,12 +83,15 @@ export function SiteHeader() {
                 key={item.href}
                 href={item.href}
                 aria-current={active ? "page" : undefined}
+                aria-label={item.label}
+                title={item.label}
                 className={cn(
-                  "rounded-md px-1.5 py-1.5 text-[0.8125rem] font-medium transition-colors sm:px-3 sm:text-sm",
+                  "flex items-center rounded-md p-1.5 text-sm font-medium transition-colors sm:px-3",
                   active ? "bg-foreground text-background" : "text-muted-foreground hover:bg-muted hover:text-foreground",
                 )}
               >
-                {item.label}
+                <item.Icon className="size-4 sm:hidden" aria-hidden="true" />
+                <span className="hidden sm:inline">{item.label}</span>
               </Link>
             );
           })}

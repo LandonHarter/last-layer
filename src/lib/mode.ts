@@ -11,9 +11,9 @@ export const setStoredMode = (mode: Mode) => modeStore.write(mode);
 
 export const MODE_HOME: Record<Mode, string> = { algs: "/", timer: "/timer" };
 
-/** Pages that belong to one mode. Analyze belongs to both and follows the stored mode. */
+/** Pages that belong to one mode. Analyze and Tools belong to both and follow the stored mode. */
 export function modeForPath(pathname: string): Mode | null {
   if (pathname.startsWith("/timer")) return "timer";
-  if (pathname.startsWith("/analyze")) return null;
+  if (pathname.startsWith("/analyze") || pathname.startsWith("/tools")) return null;
   return "algs";
 }

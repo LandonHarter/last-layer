@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { applyAlg, isSolved, solvedCube } from "./cube";
 import { invertAlg } from "./notation";
-import { randomScramble, scrambledNet } from "./scramble";
+import { cubeSize, randomScramble, scrambledNet, scrambledNetN, scrambleFor, TIMER_PUZZLES } from "./scramble";
 import {
   averageOf,
   bestAverage,
@@ -91,4 +91,19 @@ test("scramble then its inverse is solved, and the net shows a solved cube for n
   for (const face of Object.keys(net) as (keyof typeof net)[]) expect(net[face].every((c) => c === face)).toBe(true);
   // R turns the F face's right column to D's colour.
   expect(scrambledNet("R").F).toEqual(["F", "F", "D", "F", "F", "D", "F", "F", "D"]);
+});
+
+test("every timer puzzle gets a scramble, and cubes of every size draw a net", () => {
+  for (const puzzle of TIMER_PUZZLES) {
+    const s = scrambleFor(puzzle);
+    expect(s.length).toBeGreaterThan(0);
+    const n = cubeSize(puzzle);
+    if (n) {
+      const net = scrambledNetN(s, n)!;
+      expect(net.U.length).toBe(n * n);
+      // A solved cube's net is one colour per face.
+      expect(scrambledNetN("", n)!.F.every((c) => c === "F")).toBe(true);
+    }
+  }
+  expect(scrambleFor("megaminx").split(" ").filter((m) => m.startsWith("U")).length).toBe(7);
 });

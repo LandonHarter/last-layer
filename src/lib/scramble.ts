@@ -1,26 +1,108 @@
-import { applyAlg, colorOf, solvedCube, stickerAt, type Face, type Vec } from "./cube";
+import { applyAlg, colorOf, solvedCube, stickerAt, type Face, type Sticker, type Vec } from "./cube";
+import { applyMoves, faceStickers, FACES as NXN_FACES, solvedState } from "./nxn";
 
-const FACES = ["U", "D", "R", "L", "F", "B"] as const;
 const AXIS: Record<string, number> = { U: 0, D: 0, R: 1, L: 1, F: 2, B: 2 };
 const SUFFIXES = ["", "'", "2"];
 
+/** Puzzles the timer can scramble. */
+export type TimerPuzzle = "2x2" | "3x3" | "4x4" | "5x5" | "6x6" | "7x7" | "megaminx" | "pyraminx" | "skewb";
+
+export const TIMER_PUZZLES: TimerPuzzle[] = ["3x3", "2x2", "4x4", "5x5", "6x6", "7x7", "megaminx", "pyraminx", "skewb"];
+
+export const TIMER_PUZZLE_NAMES: Record<TimerPuzzle, string> = {
+  "2x2": "2x2",
+  "3x3": "3x3",
+  "4x4": "4x4",
+  "5x5": "5x5",
+  "6x6": "6x6",
+  "7x7": "7x7",
+  megaminx: "Megaminx",
+  pyraminx: "Pyraminx",
+  skewb: "Skewb",
+};
+
+export const isTimerPuzzle = (v: unknown): v is TimerPuzzle => TIMER_PUZZLES.includes(v as TimerPuzzle);
+
+const CUBE_N: Partial<Record<TimerPuzzle, number>> = { "2x2": 2, "3x3": 3, "4x4": 4, "5x5": 5, "6x6": 6, "7x7": 7 };
+export const cubeSize = (puzzle: TimerPuzzle): number | undefined => CUBE_N[puzzle];
+
+// Each cube size: the turns a scramble draws from (face plus how many layers) and its length.
+type Turn = { face: string; depth: number };
+const outer = (faces: string) => [...faces].map((face) => ({ face, depth: 1 }));
+const wide = (faces: string, depth: number) => [...faces].map((face) => ({ face, depth }));
+const CUBE_SCRAMBLE: Record<number, { turns: Turn[]; length: number }> = {
+  // 2x2: the cube has no centres, so R U F reach every state.
+  2: { turns: outer("RUF"), length: 11 },
+  3: { turns: outer("UDRLFB"), length: 20 },
+  4: { turns: [...outer("UDRLFB"), ...wide("RUF", 2)], length: 40 },
+  5: { turns: [...outer("UDRLFB"), ...wide("UDRLFB", 2)], length: 60 },
+  6: { turns: [...outer("UDRLFB"), ...wide("UDRLFB", 2), ...wide("RUF", 3)], length: 80 },
+  7: { turns: [...outer("UDRLFB"), ...wide("UDRLFB", 2), ...wide("UDRLFB", 3)], length: 100 },
+};
+
+const turnName = ({ face, depth }: Turn) => (depth === 1 ? face : depth === 2 ? `${face}w` : `${depth}${face}w`);
+
 /**
- * A random-move 3x3 scramble. It never turns the same face twice in a row and
- * never does three turns on one axis in a row (R L R), so no moves cancel.
+ * A random-move cube scramble. Turns on one axis commute, so within a run of
+ * same-axis turns no layer set is turned twice (no R R, no R L R, no Rw R Rw).
  */
-export function randomScramble(length = 20, random: () => number = Math.random): string {
+export function cubeScramble(n: number, random: () => number = Math.random, length = CUBE_SCRAMBLE[n].length): string {
+  const { turns } = CUBE_SCRAMBLE[n];
   const moves: string[] = [];
-  const faces: string[] = [];
+  let run: Turn[] = [];
   while (moves.length < length) {
-    const face = FACES[Math.floor(random() * FACES.length)];
-    const last = faces.at(-1);
-    const beforeLast = faces.at(-2);
-    if (face === last) continue;
-    if (last && beforeLast && AXIS[face] === AXIS[last] && face === beforeLast) continue;
-    faces.push(face);
-    moves.push(face + SUFFIXES[Math.floor(random() * SUFFIXES.length)]);
+    const turn = turns[Math.floor(random() * turns.length)];
+    const sameAxis = run.length > 0 && AXIS[run[0].face] === AXIS[turn.face];
+    if (sameAxis && run.some((t) => t.face === turn.face && t.depth === turn.depth)) continue;
+    run = sameAxis ? [...run, turn] : [turn];
+    moves.push(turnName(turn) + SUFFIXES[Math.floor(random() * SUFFIXES.length)]);
   }
   return moves.join(" ");
+}
+
+/** A random-move 3x3 scramble (see `cubeScramble`). */
+export function randomScramble(length = 20, random: () => number = Math.random): string {
+  return cubeScramble(3, random, length);
+}
+
+const pick = <T,>(xs: readonly T[], random: () => number) => xs[Math.floor(random() * xs.length)];
+
+// Corner puzzles: never the same face twice in a row.
+function cornerScramble(faces: string[], length: number, random: () => number): string[] {
+  const moves: string[] = [];
+  let last = "";
+  while (moves.length < length) {
+    const face = pick(faces, random);
+    if (face === last) continue;
+    last = face;
+    moves.push(face + pick(["", "'"], random));
+  }
+  return moves;
+}
+
+/** WCA-style megaminx scramble: seven lines of R++/D-- turns, each ending in U or U'. */
+function megaminxScramble(random: () => number): string {
+  const lines: string[] = [];
+  for (let line = 0; line < 7; line++) {
+    const moves: string[] = [];
+    for (let i = 0; i < 10; i++) moves.push((i % 2 ? "D" : "R") + pick(["++", "--"], random));
+    moves.push(pick(["U", "U'"], random));
+    lines.push(moves.join(" "));
+  }
+  return lines.join(" ");
+}
+
+export function scrambleFor(puzzle: TimerPuzzle, random: () => number = Math.random): string {
+  const n = CUBE_N[puzzle];
+  if (n) return cubeScramble(n, random);
+  if (puzzle === "megaminx") return megaminxScramble(random);
+  if (puzzle === "skewb") return cornerScramble(["R", "U", "L", "B"], 11, random).join(" ");
+  // Pyraminx: the big corners, then each tip turned (or not) on its own.
+  const tips = ["u", "l", "r", "b"].flatMap((tip) => {
+    const turn = pick(["", "'", null], random);
+    return turn === null ? [] : [tip + turn];
+  });
+  return [...cornerScramble(["U", "L", "R", "B"], 10, random), ...tips].join(" ");
 }
 
 // Cell (row, col) of each face in an unfolded net, as a position on the cube.
@@ -36,7 +118,11 @@ const NET_CELL: Record<Face, (row: number, col: number) => { pos: Vec; normal: V
 
 /** The sticker colors of each face after a scramble, row-major, as the face each sticker belongs to. */
 export function scrambledNet(scramble: string): Record<Face, Face[]> {
-  const state = applyAlg(solvedCube(), scramble);
+  return netOf(applyAlg(solvedCube(), scramble));
+}
+
+/** A 3x3 state's sticker colors as an unfolded net (see `scrambledNet`). */
+export function netOf(state: Sticker[]): Record<Face, Face[]> {
   const net = {} as Record<Face, Face[]>;
   for (const face of Object.keys(NET_CELL) as Face[]) {
     net[face] = [];
@@ -47,4 +133,17 @@ export function scrambledNet(scramble: string): Record<Face, Face[]> {
       }
   }
   return net;
+}
+
+/** The same net for any cube size, or null when the scramble doesn't parse. */
+export function scrambledNetN(scramble: string, n: number): Record<Face, Face[]> | null {
+  if (n === 3) return scrambledNet(scramble);
+  try {
+    const state = applyMoves(solvedState(n), scramble, n);
+    const net = {} as Record<Face, Face[]>;
+    for (const face of NXN_FACES) net[face] = faceStickers(state, n, face).map((c) => NXN_FACES[c]);
+    return net;
+  } catch {
+    return null;
+  }
 }

@@ -27,6 +27,8 @@ const jetbrains = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "Last Layer: algorithm trainer for 2x2 to 7x7 and megaminx",
   description: "Learn and drill every F2L, OLL and PLL algorithm, plus 2x2 Ortega, big-cube parity and the megaminx last layer.",
+  // The name under the icon after "Add to Home Screen" on iOS; the icon itself is app/apple-icon.png.
+  appleWebApp: { title: "Last Layer" },
 };
 
 async function loadAccount(): Promise<Account | null> {

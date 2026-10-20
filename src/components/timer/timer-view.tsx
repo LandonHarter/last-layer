@@ -15,7 +15,7 @@ import { Kbd } from "@/components/ui/kbd";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { randomScramble } from "@/lib/scramble";
+import { cubeSize, scrambleFor, type TimerPuzzle } from "@/lib/scramble";
 import type { StackmatPacket } from "@/lib/stackmat";
 import { useAudioInputs, useStackmat, type StackmatConnection } from "@/lib/use-stackmat";
 import {
@@ -25,6 +25,7 @@ import {
   formatMs,
   formatSolve,
   restoreSolve,
+  sessionPuzzle,
   updateTimerSettings,
   useTimerData,
   useTimerSettings,
@@ -57,6 +58,7 @@ export function TimerView() {
   const data = useTimerData();
   const settings = useTimerSettings();
   const solves = useMemo(() => data.solves.filter((s) => s.session === data.current), [data]);
+  const puzzle = sessionPuzzle(data.sessions.find((s) => s.id === data.current));
   const times = useMemo(() => solves.map(effectiveMs), [solves]);
 
   const [phase, setPhaseState] = useState<Phase>("idle");
@@ -74,8 +76,10 @@ export function TimerView() {
   const swallowRelease = useRef(false);
   const scrambleRef = useRef(scramble);
   const settingsRef = useRef<TimerSettings>(settings);
+  const puzzleRef = useRef<TimerPuzzle>(puzzle);
   scrambleRef.current = scramble;
   settingsRef.current = settings;
+  puzzleRef.current = puzzle;
 
   const setPhase = useCallback((p: Phase) => {
     phaseRef.current = p;
@@ -87,7 +91,8 @@ export function TimerView() {
   }, []);
 
   // Scrambles are random, so make the first one on the client to keep hydration stable.
-  useEffect(() => setScramble(randomScramble()), []);
+  // A session on another puzzle needs a scramble for that puzzle.
+  useEffect(() => setScramble(scrambleFor(puzzle)), [puzzle]);
 
   // Hide the rest of the page while inspecting or solving.
   useEffect(() => {
@@ -143,7 +148,7 @@ export function TimerView() {
       inspectionMs,
     });
     setLastId(solve.id);
-    setScramble(randomScramble());
+    setScramble(scrambleFor(puzzleRef.current));
   }, [setPhase, setInspectStart]);
 
   // Press: start holding (or inspection). Release: start the clock if it's ready.
@@ -299,33 +304,23 @@ export function TimerView() {
   const ao12 = averageOf(times, 12);
   const hideWhileTiming = "transition-opacity duration-200 in-data-timing:pointer-events-none in-data-timing:opacity-0";
 
-  return (
-    <div className="mx-auto grid w-full max-w-7xl flex-1 lg:grid-cols-[minmax(0,1fr)_22rem]">
-      <section aria-label="Timer" className="relative flex min-h-[calc(100svh-3.5rem-1px)] flex-col px-4 py-6 sm:px-6 lg:min-h-0">
-        <div className={cn("flex flex-col items-center gap-3 text-center", hideWhileTiming)}>
-          <h1 className="sr-only">Timer</h1>
-          <div className="min-h-[4.5rem] max-w-3xl">
-            {scramble && (
-              <MoveSequence
-                key={scramble}
-                alg={scramble}
-                className="animate-in justify-center text-[clamp(1.05rem,2.2vw,1.55rem)] leading-snug duration-200 fade-in-0"
-              />
-            )}
-          </div>
-          <div className="flex flex-wrap items-center justify-center gap-2">
-            <SessionPicker />
-            <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => setScramble(randomScramble())}>
-              <RefreshCwIcon data-icon="inline-start" />
-              New scramble
-            </Button>
-            <TimerSettingsButton settings={settings} />
-          </div>
-        </div>
+  // Big-cube and megaminx scrambles run long, so they get smaller type and scroll if they must.
+  const long = (cubeSize(puzzle) ?? 5) >= 5;
+  const scrambleSize = long
+    ? "max-h-[28svh] overflow-y-auto text-sm sm:text-base"
+    : puzzle === "4x4"
+      ? "text-[clamp(0.95rem,1.7vw,1.2rem)]"
+      : "text-[clamp(1.05rem,2.2vw,1.55rem)]";
 
-        {/* The whole middle is the touch target, so phones can hold anywhere. */}
+  return (
+    // On desktop the timer column sits between two equal side columns, so the clock is centred on the screen.
+    <div className="mx-auto grid w-full max-w-7xl flex-1 lg:grid-cols-[18rem_minmax(0,1fr)_18rem] xl:grid-cols-[22rem_minmax(0,1fr)_22rem]">
+      <section aria-label="Timer" className="relative flex min-h-[calc(100svh-3.5rem-1px)] flex-col px-4 py-6 sm:px-6 lg:col-start-2 lg:px-2">
+        {/* The whole timer area is the touch target, so phones can hold anywhere. It reaches up under the
+            header so the clock in it is centred on the screen once the header fades out. */}
         <div
-          className="flex flex-1 touch-none select-none flex-col items-center justify-center py-10"
+          aria-hidden="true"
+          className="absolute inset-x-0 -top-[calc(3.5rem+1px)] bottom-0 touch-none select-none"
           onPointerDown={(e) => {
             if (e.button !== 0) return;
             e.currentTarget.setPointerCapture(e.pointerId);
@@ -333,68 +328,99 @@ export function TimerView() {
           }}
           onPointerUp={release}
           onPointerCancel={cancel}
-        >
-          <output
-            aria-live="off"
-            aria-label="Time"
-            className={cn("font-clock block text-center text-[clamp(5.5rem,19vw,15rem)] leading-none transition-colors duration-100", faceColor)}
-          >
-            {face}
-          </output>
-          <p
-            className={cn("mt-6 flex gap-8 text-lg tabular-nums text-muted-foreground sm:text-xl", hideWhileTiming)}
-            aria-live="polite"
-          >
-            <span>
-              ao5 <span className="font-bold text-foreground">{formatMs(ao5)}</span>
-            </span>
-            <span>
-              ao12 <span className="font-bold text-foreground">{formatMs(ao12)}</span>
-            </span>
-          </p>
-          <div className={cn("mt-4 flex h-8 items-center gap-1", hideWhileTiming)} onPointerDown={(e) => e.stopPropagation()}>
-            {last ? (
-              <>
-                <PenaltyToggle solve={last} />
-                <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-missed" onClick={() => removeSolve(last)}>
-                  Delete
-                </Button>
-              </>
-            ) : stackmat ? (
-              <p className="text-sm text-muted-foreground">Put both hands on the mat until it turns green, then lift them to start.</p>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                Hold <Kbd>Space</Kbd> until the time turns green, then let go to start. Any key stops it.
-              </p>
+        />
+
+        <div className={cn("relative z-10 flex flex-col items-center gap-3 text-center", hideWhileTiming)}>
+          <h1 className="sr-only">Timer</h1>
+          <div className="min-h-[4.5rem] max-w-3xl">
+            {scramble && (
+              <MoveSequence key={scramble} alg={scramble} className={cn("animate-in justify-center leading-snug duration-200 fade-in-0", scrambleSize)} />
             )}
           </div>
-          {stackmat && (
-            <p
-              className={cn(
-                "mt-1 flex items-center gap-2 text-sm",
-                connection === "connected" || connection === "starting" ? "text-muted-foreground" : "text-missed",
-                hideWhileTiming,
-              )}
-              aria-live="polite"
-            >
-              <span aria-hidden="true" className={cn("size-2 rounded-full", connection === "connected" ? "bg-learned" : "bg-missed")} />
-              {CONNECTION[connection]}
-            </p>
-          )}
-          {last && (
-            <div className={cn("mt-1 flex items-center gap-1", hideWhileTiming)} onPointerDown={(e) => e.stopPropagation()}>
-              <CasePicker solve={last} step="oll" />
-              <CasePicker solve={last} step="pll" />
-            </div>
-          )}
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <SessionPicker />
+            <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => setScramble(scrambleFor(puzzle))}>
+              <RefreshCwIcon data-icon="inline-start" />
+              New scramble
+            </Button>
+            <TimerSettingsButton settings={settings} />
+          </div>
         </div>
 
-        <ScrambleNet scramble={scramble} className={cn("mx-auto w-44 sm:absolute sm:bottom-6 sm:left-6 sm:w-48", hideWhileTiming)} />
+        {/* The clock alone decides the centre; everything else hangs below it. */}
+        <div className="pointer-events-none absolute inset-x-0 -top-[calc(3.5rem+1px)] bottom-0 flex items-center justify-center">
+          <div className="relative">
+            <output
+              aria-live="off"
+              aria-label="Time"
+              className={cn(
+                "font-clock block text-center text-[clamp(5.5rem,19vw,15rem)] leading-none whitespace-nowrap transition-colors duration-100 lg:text-[clamp(6rem,11vw,12rem)]",
+                faceColor,
+              )}
+            >
+              {face}
+            </output>
+            <div className={cn("absolute top-full left-1/2 flex w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-col items-center", hideWhileTiming)}>
+              <p className="mt-6 flex gap-8 text-lg tabular-nums text-muted-foreground sm:text-xl" aria-live="polite">
+                <span>
+                  ao5 <span className="font-bold text-foreground">{formatMs(ao5)}</span>
+                </span>
+                <span>
+                  ao12 <span className="font-bold text-foreground">{formatMs(ao12)}</span>
+                </span>
+              </p>
+              <div className="pointer-events-auto mt-4 flex min-h-8 items-center gap-1 text-center" onPointerDown={(e) => e.stopPropagation()}>
+                {last ? (
+                  <>
+                    <PenaltyToggle solve={last} />
+                    <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-missed" onClick={() => removeSolve(last)}>
+                      Delete
+                    </Button>
+                  </>
+                ) : stackmat ? (
+                  <p className="text-sm text-muted-foreground">Put both hands on the mat until it turns green, then lift them to start.</p>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Hold <Kbd>Space</Kbd> until the time turns green, then let go to start. Any key stops it.
+                  </p>
+                )}
+              </div>
+              {stackmat && (
+                <p
+                  className={cn(
+                    "mt-1 flex items-center gap-2 text-sm",
+                    connection === "connected" || connection === "starting" ? "text-muted-foreground" : "text-missed",
+                  )}
+                  aria-live="polite"
+                >
+                  <span aria-hidden="true" className={cn("size-2 rounded-full", connection === "connected" ? "bg-learned" : "bg-missed")} />
+                  {CONNECTION[connection]}
+                </p>
+              )}
+              {last && puzzle === "3x3" && (
+                <div className="pointer-events-auto mt-1 flex items-center gap-1" onPointerDown={(e) => e.stopPropagation()}>
+                  <CasePicker solve={last} step="oll" />
+                  <CasePicker solve={last} step="pll" />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom-left of the timer on small screens; on desktop, in the empty left column. */}
+        <ScrambleNet
+          scramble={scramble}
+          puzzle={puzzle}
+          className={cn(
+            "pointer-events-none absolute bottom-4 left-4 w-28 sm:bottom-6 sm:left-6 sm:w-48 lg:right-[calc(100%+1.5rem)] lg:left-auto lg:w-56",
+            hideWhileTiming,
+          )}
+        />
       </section>
 
       <aside
         aria-label="Session"
-        className={cn("flex flex-col gap-5 border-t border-border px-4 py-6 sm:px-6 lg:max-h-[calc(100svh-3.5rem-1px)] lg:border-t-0 lg:border-l", hideWhileTiming)}
+        className={cn("flex flex-col gap-5 border-t border-border px-4 py-6 sm:px-6 lg:col-start-3 lg:max-h-[calc(100svh-3.5rem-1px)] lg:border-t-0 lg:border-l", hideWhileTiming)}
       >
         <SessionStats times={times} />
         <SolveList solves={solves} times={times} onDelete={removeSolve} />

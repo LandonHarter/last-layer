@@ -1,5 +1,6 @@
 "use client";
 
+import { isTimerPuzzle, type TimerPuzzle } from "./scramble";
 import { DNF } from "./stats";
 import { createStore } from "./store";
 
@@ -25,7 +26,10 @@ export type Solve = {
 /** The last-layer steps a solve can be tagged with. */
 export type SolveStep = "oll" | "pll";
 
-export type Session = { id: string; name: string };
+/** A group of solves on one puzzle. Sessions saved before puzzles existed are 3x3. */
+export type Session = { id: string; name: string; puzzle?: TimerPuzzle };
+
+export const sessionPuzzle = (s: Session | undefined): TimerPuzzle => (isTimerPuzzle(s?.puzzle) ? s.puzzle : "3x3");
 
 type TimerData = { solves: Solve[]; sessions: Session[]; current: string };
 
@@ -88,8 +92,8 @@ export function setCurrentSession(id: string) {
   timerStore.update((d) => ({ ...d, current: id }));
 }
 
-export function addSession(name: string): Session {
-  const session = { id: newId(), name };
+export function addSession(name: string, puzzle: TimerPuzzle = "3x3"): Session {
+  const session = { id: newId(), name, puzzle };
   timerStore.update((d) => ({ ...d, sessions: [...d.sessions, session], current: session.id }));
   return session;
 }
@@ -98,12 +102,38 @@ export function renameSession(id: string, name: string) {
   timerStore.update((d) => ({ ...d, sessions: d.sessions.map((s) => (s.id === id ? { ...s, name } : s)) }));
 }
 
-/** Removes a session and its solves. The last session can't be removed. */
-export function deleteSession(id: string) {
+/** Change the puzzle a session scrambles for. Its solves stay. */
+export function setSessionPuzzle(id: string, puzzle: TimerPuzzle) {
+  timerStore.update((d) => ({ ...d, sessions: d.sessions.map((s) => (s.id === id ? { ...s, puzzle } : s)) }));
+}
+
+/**
+ * Removes a session and its solves. Removing the last one leaves a fresh,
+ * empty session in its place; its id is returned so undo can drop it again.
+ */
+export function deleteSession(id: string): string | null {
+  let standIn: string | null = null;
   timerStore.update((d) => {
-    if (d.sessions.length <= 1) return d;
-    const sessions = d.sessions.filter((s) => s.id !== id);
+    let sessions = d.sessions.filter((s) => s.id !== id);
+    if (!sessions.length) {
+      standIn = newId();
+      sessions = [{ id: standIn, name: MAIN.name, puzzle: "3x3" }];
+    }
     return { solves: d.solves.filter((s) => s.session !== id), sessions, current: d.current === id ? sessions[0].id : d.current };
+  });
+  return standIn;
+}
+
+/** Put a deleted session and its solves back, for undo. */
+export function restoreSession(session: Session, solves: Solve[], wasCurrent: boolean, standIn: string | null) {
+  timerStore.update((d) => {
+    const unused = (id: string) => id === standIn && !d.solves.some((s) => s.session === id);
+    const sessions = [...d.sessions.filter((s) => s.id !== session.id && !unused(s.id)), session];
+    return {
+      sessions,
+      solves: [...d.solves, ...solves].sort((a, b) => a.at - b.at),
+      current: wasCurrent || !sessions.some((s) => s.id === d.current) ? session.id : d.current,
+    };
   });
 }
 
