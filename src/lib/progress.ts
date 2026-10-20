@@ -1,6 +1,6 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { createStore } from "./store";
 
 export type Status = "unknown" | "learning" | "learned";
 
@@ -27,44 +27,9 @@ export type Entry = {
 
 export type Progress = Record<string, Entry>;
 
-const KEY = "last-layer:progress:v1";
-const EMPTY: Progress = {};
-const listeners = new Set<() => void>();
-let cache: Progress | null = null;
-
-function read(): Progress {
-  if (cache) return cache;
-  try {
-    cache = JSON.parse(localStorage.getItem(KEY) ?? "{}") as Progress;
-  } catch {
-    cache = {};
-  }
-  return cache;
-}
-
-function write(next: Progress) {
-  cache = next;
-  try {
-    localStorage.setItem(KEY, JSON.stringify(next));
-  } catch {
-    // Storage full or blocked: keep the in-memory copy for this session.
-  }
-  listeners.forEach((l) => l());
-}
-
-function subscribe(listener: () => void) {
-  listeners.add(listener);
-  const onStorage = (e: StorageEvent) => {
-    if (e.key !== KEY) return;
-    cache = null;
-    listener();
-  };
-  window.addEventListener("storage", onStorage);
-  return () => {
-    listeners.delete(listener);
-    window.removeEventListener("storage", onStorage);
-  };
-}
+const store = createStore<Progress>("last-layer:progress:v1", {});
+const read = store.read;
+const write = store.write;
 
 export const blankEntry = (): Entry => ({ status: "unknown", attempts: 0, misses: 0, missStreak: 0, lastSeen: 0 });
 
@@ -127,9 +92,7 @@ export function recordAttempt(id: string, success: boolean) {
   });
 }
 
-export function useProgress(): Progress {
-  return useSyncExternalStore(subscribe, read, () => EMPTY);
-}
+export const useProgress = (): Progress => store.use();
 
 /** Current progress outside React, for event handlers that just wrote to it. */
 export const getProgress = (): Progress => read();

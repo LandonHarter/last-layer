@@ -1,11 +1,12 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import { readItem, signedIn, writeItem } from "./storage";
 
 /**
- * A value kept in localStorage and shared by every component that reads it,
- * the same way `progress.ts` works. Object values are merged over `fallback`,
- * so new fields get their defaults.
+ * A value kept in localStorage (or the account, when signed in; see
+ * `storage.ts`) and shared by every component that reads it. Object values
+ * are merged over `fallback`, so new fields get their defaults.
  */
 export function createStore<T>(key: string, fallback: T) {
   const listeners = new Set<() => void>();
@@ -14,8 +15,8 @@ export function createStore<T>(key: string, fallback: T) {
   function read(): T {
     if (cache !== undefined) return cache;
     try {
-      const raw = localStorage.getItem(key);
-      const parsed = raw === null ? fallback : (JSON.parse(raw) as T);
+      const stored = readItem(key) as T | undefined;
+      const parsed = stored === undefined || stored === null ? fallback : stored;
       cache = isPlainObject(fallback) && isPlainObject(parsed) ? { ...fallback, ...parsed } : parsed;
     } catch {
       cache = fallback;
@@ -25,18 +26,15 @@ export function createStore<T>(key: string, fallback: T) {
 
   function write(next: T) {
     cache = next;
-    try {
-      localStorage.setItem(key, JSON.stringify(next));
-    } catch {
-      // Storage full or blocked: keep the in-memory copy for this session.
-    }
+    writeItem(key, next);
     listeners.forEach((l) => l());
   }
 
   function subscribe(listener: () => void) {
     listeners.add(listener);
+    // Another tab changed this browser's data. Signed in, localStorage isn't used.
     const onStorage = (e: StorageEvent) => {
-      if (e.key !== key) return;
+      if (e.key !== key || signedIn()) return;
       cache = undefined;
       listener();
     };

@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { DatabaseBackupIcon, DownloadIcon, UploadIcon } from "lucide-react";
 import { toast } from "sonner";
+import { useAccount } from "@/components/account-provider";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { downloadBackup, parseBackup, restoreBackup, type Backup } from "@/lib/backup";
@@ -15,7 +16,10 @@ const dateTime = new Intl.DateTimeFormat(undefined, {
 export function BackupMenu() {
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState<Backup | null>(null);
+  const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const user = useAccount();
+  const where = user ? "your account" : "this browser";
 
   async function load(file: File) {
     try {
@@ -28,10 +32,16 @@ export function BackupMenu() {
     }
   }
 
-  function replace() {
+  async function replace() {
     if (!pending) return;
-    restoreBackup(pending);
-    window.location.reload();
+    setBusy(true);
+    try {
+      await restoreBackup(pending);
+      window.location.reload();
+    } catch {
+      setBusy(false);
+      toast("Couldn't load the backup", { description: "Check your connection and try again." });
+    }
   }
 
   return (
@@ -52,16 +62,16 @@ export function BackupMenu() {
         <PopoverContent align="end" sideOffset={8} className="w-80 gap-3 p-3">
           {pending ? (
             <>
-              <p className="font-semibold">Replace this browser&apos;s data?</p>
+              <p className="font-semibold">Replace {user ? "your account's" : "this browser's"} data?</p>
               <p className="text-muted-foreground">
-                Your progress, algorithms, solves and drill log here will be swapped for the backup saved{" "}
+                Your progress, algorithms, solves and drill log in {where} will be swapped for the backup saved{" "}
                 {dateTime.format(new Date(pending.exportedAt))}. Save a backup first if you want to keep them.
               </p>
               <div className="flex justify-end gap-2">
                 <Button variant="ghost" size="sm" onClick={() => setPending(null)}>
                   Cancel
                 </Button>
-                <Button variant="destructive" size="sm" onClick={replace}>
+                <Button variant="destructive" size="sm" disabled={busy} onClick={replace}>
                   Replace
                 </Button>
               </div>
@@ -70,7 +80,9 @@ export function BackupMenu() {
             <>
               <p className="font-semibold">Your data</p>
               <p className="text-muted-foreground">
-                Everything is kept in this browser. Save a backup, then load it in another browser to carry on there.
+                {user
+                  ? "Everything is saved to your account. Save a backup to keep a copy of your own."
+                  : "Everything is kept in this browser. Save a backup, then load it in another browser to carry on there, or sign in to save it to an account."}
               </p>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" className="flex-1" onClick={downloadBackup}>

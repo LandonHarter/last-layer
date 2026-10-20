@@ -41,7 +41,7 @@ Sticker palettes for the picker previews live in `src/lib/themes.ts`, because th
 
 ## Layout
 
-- **Header:** sticky. Holds the wordmark (hidden below `sm`), the Algorithms/Timer mode switch (active filled with primary; icons only below `md`), that mode's nav (Library, Learn, Drill, Analyze or Timer, Analyze; active filled with foreground), the backup button (a popover to save all data to a file or load one, which replaces this browser's data after a confirm), and the theme button. Below `sm` the nav text and gaps shrink so it fits at 375px. Opening a page of one mode switches to it; Analyze follows the last mode. While the timer runs, the header fades out (`data-timing` on `<html>`).
+- **Header:** sticky. Holds the wordmark (hidden below `sm`), the Algorithms/Timer mode switch (active filled with primary; icons only below `md`), that mode's nav (Library, Learn, Drill, Analyze or Timer, Analyze; active filled with foreground), the backup button (a popover to save all data to a file or load one, which replaces this browser's or the account's data after a confirm), the theme button, and the account button (Sign in with Google, or your avatar with save status and Sign out). A new account gets a dialog: Load backup file, Use this browser's data (with counts), or Start fresh. Below `sm` the nav text and gaps shrink so it fits at 375px. Opening a page of one mode switches to it; Analyze follows the last mode. While the timer runs, the header fades out (`data-timing` on `<html>`).
 - **Library (`/`):**
   - Hero: headline (one per puzzle) and short explainer on the left, progress board for the puzzle's sets on the right. Every set is 3 rows at the same square size as 3x3 OLL (19 wide): F2L 14 (41 cases leave one gap), PLL 7.
   - Filter bar: full width and sticky under the header. Contains the puzzle select (shared with Learn and Drill), search, an All plus that puzzle's sets toggle, a status select, and a shape select. Filters are kept in the URL (`?puzzle=&q=&set=&status=&shape=`, replaced rather than pushed; 3x3 leaves out `puzzle`), so a refresh or Back keeps them.
@@ -61,6 +61,7 @@ Sticker palettes for the picker previews live in `src/lib/themes.ts`, because th
   - Sidebar (right on desktop, below on mobile): current and best single, mo3, ao5, ao12, ao50, ao100 and mean, then the solve list (latest 200). A row opens its scramble, date, OLL/PLL tags and penalty controls.
   - Clock colors: holding is `missed`, ready is `learned` (stackmat red/green). Inspection turns `learning` after 8 s and `missed` after 15 s.
   - Controls: hold Space for the hold time (0.3 s by default), let go to start; any key or a tap stops. Esc cancels a hold or inspection. On touch, the middle of the page is the pad. Everything but the clock fades out while timing.
+  - Stackmat (Settings > Timer): the mat drives the clock through an audio input picked in Settings. Hands down shows `missed`, green light `learned`, and the mat's own time is saved. Space only starts inspection. A dot and line under the clock say whether the signal is coming in.
 - **Analyze (`/analyze`):**
   - Title with a Timer solves / Algorithm drills toggle (the same state as the header switch). A sticky filter row scopes everything below: session (plus OLL and PLL case, once you've tagged solves) or set and case, range, and an outlier rule. Outliers are drawn hollow and left out of lines, fits and tests; DNFs never count as outliers.
   - Summary: one hero figure (mean time, or the share you got for drills) with its 95% interval, then a grid of figures.
@@ -96,4 +97,4 @@ Case images are SVGs in `public/cases/{id}.svg`, yellow top, green front, red ri
 - Works down to 390px wide with no horizontal scroll.
 - Focus outlines are visible (`--ring`).
 - Contrast is AA in every theme.
-- Progress, solves and the drill log live in `localStorage`, so there is a brief default render before hydration.
+- Progress, solves and the drill log live in `localStorage` (or the account, loaded with the page), so there is a brief default render before hydration.

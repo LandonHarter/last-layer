@@ -1,6 +1,6 @@
 # Last Layer
 
-A trainer for memorizing Rubik's cube F2L (41), OLL (57) and PLL (21) algorithms, plus 2x2 Ortega (OLL, PBL), 4x4 to 7x7 parity and edge cases, and the megaminx 4-look last layer (EO, CO, EP, CP), and a speedcubing timer. Library, Learn and Drill share one puzzle choice (`last-layer:puzzle:v1`, `src/lib/puzzle-choice.ts`); the timer is 3x3 only. Each case has several algorithms; you pick your main one or add your own. The header switches between Algorithms mode (Library, Learn, Drill) and Timer mode (Timer); Analyze charts and tests the data of either. It is built with Next 16 (App Router), React 19, Tailwind 4, shadcn (base-nova / Base UI) and bun. There is no backend: progress, solves and the drill log are kept in `localStorage`. The header's backup button saves all of it to one file and loads it in another browser (`src/lib/backup.ts`).
+A trainer for memorizing Rubik's cube F2L (41), OLL (57) and PLL (21) algorithms, plus 2x2 Ortega (OLL, PBL), 4x4 to 7x7 parity and edge cases, and the megaminx 4-look last layer (EO, CO, EP, CP), and a speedcubing timer. Library, Learn and Drill share one puzzle choice (`last-layer:puzzle:v1`, `src/lib/puzzle-choice.ts`); the timer is 3x3 only. Each case has several algorithms; you pick your main one or add your own. The header switches between Algorithms mode (Library, Learn, Drill) and Timer mode (Timer); Analyze charts and tests the data of either. It is built with Next 16 (App Router), React 19, Tailwind 4, shadcn (base-nova / Base UI), bun, Prisma 7 (Postgres on Neon) and Better Auth (Google sign-in). Signed out, progress, solves and the drill log are kept in `localStorage`; signed in, they live in the database and localStorage is not touched (`src/lib/storage.ts`). A new account is offered to load a backup file or this browser's data. The header's backup button saves all of it to one file and loads it elsewhere (`src/lib/backup.ts`).
 
 UI design, tokens and themes are documented in [DESIGN.md](./DESIGN.md). Read it before changing any UI.
 
@@ -10,6 +10,7 @@ UI design, tokens and themes are documented in [DESIGN.md](./DESIGN.md). Read it
 - `bun run build`: production build
 - `bun test`: run the tests (algorithm data is checked with a cube simulator, plus scheduler behaviour, stats and scrambles)
 - `bunx tsc --noEmit`: typecheck
+- `bun run db:migrate`: create and apply a migration after editing `prisma/schema.prisma` (`db:deploy` applies them in production; `postinstall` runs `prisma generate`)
 - `bun run fetch-images [--force]`: write case SVGs into `public/cases/` (3x3 from VisualCube, other puzzles drawn locally)
 
 ## Layout
@@ -24,7 +25,10 @@ UI design, tokens and themes are documented in [DESIGN.md](./DESIGN.md). Read it
 - `src/lib/cube.ts`: sticker-level 3x3 simulator, used by the tests and for PLL arrows
 - `scripts/case-svg.ts`: draws every non-3x3 case image from the simulators (VisualCube-style plan view, arrows for cases that end solved); a test checks the files in `public/cases/` match
 - `src/lib/progress.ts`: `useProgress()` store (`useSyncExternalStore` over localStorage key `last-layer:progress:v1`). An entry also holds `main` (chosen alg), `custom` (your own algs) and `notes` (shown as the Drill hint); read the main with `mainAlg()`.
-- `src/lib/store.ts`: `createStore(key, fallback)`, the localStorage + `useSyncExternalStore` pattern used by the stores below
+- `src/lib/store.ts`: `createStore(key, fallback)`, the storage + `useSyncExternalStore` pattern used by the stores below
+- `src/lib/storage.ts`: where stores keep values: localStorage signed out, the account signed in (loaded by the root layout, changes sent to `POST /api/data` after 500 ms). `src/lib/user-data.ts`: the shared sync diff (documents whole; solves and drill log as row changes) and input checks. `src/lib/user-data.server.ts`: load, apply and replace in Postgres. Env: `DATABASE_URL` (migrations), `DATABASE_URL_POOLED` (app), `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
+- `src/lib/auth.ts`, `src/lib/auth-client.ts`, `src/lib/db.ts`: Better Auth (with an `onboarded` user field), its client, and the Prisma client (generated into `src/generated/prisma`, gitignored)
+- `src/lib/stackmat.ts`: Stackmat audio decoder (1200 baud serial, either polarity, gen 2 and gen 3+ packets); `src/lib/use-stackmat.ts` reads it from an audio input
 - `src/lib/solves.ts`: timer solves (optionally tagged with an `oll`/`pll` case id via `setSolveCase`) and sessions (`last-layer:timer:v1`), timer settings, the drill log (`last-layer:drill-log:v1`, one entry per drill answer), `effectiveMs` (+2 adds 2 s, DNF is `Infinity`) and `formatMs`
 - `src/lib/mode.ts`: Algorithms/Timer mode (`last-layer:mode:v1`); pages of one mode set it, Analyze follows it
 - `src/lib/stats.ts`: WCA averages (aoN trims 1 each end up to ao12, 5% above; too many DNFs make a DNF), outlier rules, normal/t distributions, Shapiro-Wilk, regression, Welch t-test, histograms

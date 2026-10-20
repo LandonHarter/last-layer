@@ -42,9 +42,19 @@ export type TimerSettings = {
   inspection: boolean;
   /** Show the running time, or just "Solving". */
   showRunning: boolean;
+  /** Start and stop with Space (or a tap), or read a Stackmat plugged into an audio input. */
+  input: "keyboard" | "stackmat";
+  /** The audio input the Stackmat is on; empty for the default one. */
+  stackmatDevice: string;
 };
 
-const settingsStore = createStore<TimerSettings>("last-layer:timer-settings:v1", { holdMs: 300, inspection: false, showRunning: true });
+const settingsStore = createStore<TimerSettings>("last-layer:timer-settings:v1", {
+  holdMs: 300,
+  inspection: false,
+  showRunning: true,
+  input: "keyboard",
+  stackmatDevice: "",
+});
 export const useTimerSettings = settingsStore.use;
 export const updateTimerSettings = (change: Partial<TimerSettings>) => settingsStore.update((s) => ({ ...s, ...change }));
 

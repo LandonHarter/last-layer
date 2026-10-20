@@ -1,34 +1,22 @@
 "use client";
 
 /**
- * Everything the app keeps in localStorage, as one file you can load in
- * another browser: progress, your algorithms, solves, sessions, settings, the
- * drill log, mode and theme.
+ * Everything the app keeps (in this browser, or in your account when signed
+ * in), as one file you can load elsewhere: progress, your algorithms, solves,
+ * sessions, settings, the drill log, mode and theme.
  */
 
-const PREFIX = "last-layer:";
-// next-themes keeps the theme under this key.
-const EXTRA_KEYS = ["theme"];
+import { allItems, freezeSync, signedIn } from "./storage";
+import { isDataKey } from "./user-data";
+
 const APP = "last-layer";
 const VERSION = 2;
 
 export type Backup = { app: typeof APP; version: number; exportedAt: string; data: Record<string, unknown> };
 
-const ours = (key: string) => key.startsWith(PREFIX) || EXTRA_KEYS.includes(key);
+const ours = isDataKey;
 
-export function makeBackup(): Backup {
-  const data: Record<string, unknown> = {};
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (!key || !ours(key)) continue;
-    const raw = localStorage.getItem(key);
-    if (raw === null) continue;
-    try {
-      data[key] = JSON.parse(raw);
-    } catch {
-      data[key] = raw;
-    }
-  }
+export function makeBackup(data: Record<string, unknown> = allItems()): Backup {
   return { app: APP, version: VERSION, exportedAt: new Date().toISOString(), data };
 }
 
@@ -51,8 +39,23 @@ export function parseBackup(text: string): Backup {
   return parsed as Backup;
 }
 
-/** Replace this browser's data with the backup's. Reload afterwards so every store rereads it. */
-export function restoreBackup(backup: Backup) {
+/** Replace your account's data with `data` (nothing, to start fresh). Reload afterwards. */
+export async function replaceAccountData(data: Record<string, unknown>) {
+  await freezeSync();
+  const res = await fetch("/api/data/import", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ data }),
+  });
+  if (!res.ok) throw new Error(`Import failed: ${res.status}`);
+}
+
+/**
+ * Replace this browser's data (or your account's, when signed in) with the
+ * backup's. Reload afterwards so every store rereads it.
+ */
+export async function restoreBackup(backup: Backup) {
+  if (signedIn()) return replaceAccountData(backup.data);
   const existing: string[] = [];
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);

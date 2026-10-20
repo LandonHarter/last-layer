@@ -1,0 +1,131 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Better Auth (https://www.better-auth.com/docs/concepts/database)
+
+model User {
+  id            String    @id
+  name          String
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  image         String?
+  /// Set once the account has chosen what to start with (a backup file, this browser's data, or nothing).
+  onboarded     Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  sessions      Session[]
+  accounts      Account[]
+  docs          UserDoc[]
+  solves        Solve[]
+  drillAttempts DrillAttempt[]
+
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+// ---------------------------------------------------------------------------
+// App data. Small values (progress, learn, settings, sessions, …) are one JSON
+// document per localStorage key; solves and the drill log grow without bound,
+// so they get rows of their own.
+
+model UserDoc {
+  userId    String
+  /// The localStorage key the value lives under when signed out, like `last-layer:progress:v1`.
+  key       String
+  value     Json
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, key])
+  @@map("user_doc")
+}
+
+model Solve {
+  userId       String
+  /// Made on the client, so it's only unique per user.
+  id           String
+  ms           Int
+  /// "none", "+2" or "dnf".
+  penalty      String
+  scramble     String
+  /// When the solve finished (epoch ms).
+  at           BigInt
+  session      String
+  inspectionMs Int?
+  oll          String?
+  pll          String?
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, id])
+  @@index([userId, at])
+  @@map("solve")
+}
+
+model DrillAttempt {
+  id       String  @id @default(cuid())
+  userId   String
+  caseId   String
+  ok       Boolean
+  ms       Int
+  revealed Boolean
+  hinted   Boolean?
+  at       BigInt
+  user     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Retrying a sync must not log an answer twice.
+  @@unique([userId, at, caseId])
+  @@map("drill_attempt")
+}

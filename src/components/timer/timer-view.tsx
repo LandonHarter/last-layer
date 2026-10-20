@@ -13,8 +13,11 @@ import { SessionStats } from "@/components/timer/session-stats";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { randomScramble } from "@/lib/scramble";
+import type { StackmatPacket } from "@/lib/stackmat";
+import { useAudioInputs, useStackmat, type StackmatConnection } from "@/lib/use-stackmat";
 import {
   addSolve,
   deleteSolve,
@@ -41,6 +44,14 @@ const DNF_AFTER_MS = 17000;
 function inspectionPenalty(usedMs: number): Penalty {
   return usedMs > DNF_AFTER_MS ? "dnf" : usedMs > INSPECTION_MS ? "+2" : "none";
 }
+
+const CONNECTION: Record<StackmatConnection, string> = {
+  starting: "Connecting to the Stackmat…",
+  "no-signal": "No Stackmat signal. Turn it on and plug it into the audio input picked in Settings.",
+  connected: "Stackmat connected",
+  blocked: "Allow the microphone so the page can read the Stackmat.",
+  error: "Couldn't open that audio input. Pick another in Settings.",
+};
 
 export function TimerView() {
   const data = useTimerData();
@@ -113,13 +124,15 @@ export function TimerView() {
     setPhase("idle");
   }, [setPhase, setInspectStart]);
 
-  const stop = useCallback(() => {
+  /** Stop the clock. A Stackmat passes its own time, which is the one that counts. */
+  const stop = useCallback((stackmatMs?: number) => {
     const end = performance.now();
-    const ms = Math.round(end - startRef.current);
+    const ms = stackmatMs ?? Math.round(end - startRef.current);
     const inspected = inspectStartRef.current;
     const inspectionMs = inspected === null ? undefined : Math.round(startRef.current - inspected);
     setInspectStart(null);
-    swallowRelease.current = true;
+    // The mat stops itself, so no key is down to swallow.
+    swallowRelease.current = stackmatMs === undefined;
     setPhase("idle");
     setNow(end);
     const solve = addSolve({
@@ -136,12 +149,14 @@ export function TimerView() {
   // Press: start holding (or inspection). Release: start the clock if it's ready.
   const press = useCallback(() => {
     const p = phaseRef.current;
-    if (p === "running") return stop();
+    const stackmat = settingsRef.current.input === "stackmat";
+    if (p === "running") return stackmat ? undefined : stop();
     if (p === "idle" && settingsRef.current.inspection) {
       armInspection.current = true;
       return;
     }
-    if (p === "idle" || p === "inspecting") beginHold();
+    // With a Stackmat, the mat starts the clock; Space only starts inspection.
+    if (!stackmat && (p === "idle" || p === "inspecting")) beginHold();
   }, [beginHold, stop]);
 
   const release = useCallback(() => {
@@ -156,6 +171,7 @@ export function TimerView() {
       setNow(performance.now());
       return setPhase("inspecting");
     }
+    if (settingsRef.current.input === "stackmat") return;
     if (p === "holding") {
       window.clearTimeout(holdTimer.current);
       return setPhase(inspectStartRef.current === null ? "idle" : "inspecting");
@@ -175,6 +191,7 @@ export function TimerView() {
     function onKeyDown(e: KeyboardEvent) {
       if (ignore(e)) return;
       if (phaseRef.current === "running") {
+        if (settingsRef.current.input === "stackmat") return;
         // Any key stops the clock, like slapping a stackmat.
         if (e.repeat || ["Shift", "Control", "Alt", "Meta"].includes(e.key)) return;
         e.preventDefault();
@@ -196,7 +213,7 @@ export function TimerView() {
     }
     // A tap anywhere stops a running clock; the timer area handles its own taps first.
     function onPointerDown() {
-      if (phaseRef.current !== "running") return;
+      if (phaseRef.current !== "running" || settingsRef.current.input === "stackmat") return;
       stop();
       // This release lands outside the timer area, so nothing will consume it.
       swallowRelease.current = false;
@@ -212,6 +229,44 @@ export function TimerView() {
   }, [cancel, press, release, stop]);
 
   useEffect(() => () => window.clearTimeout(holdTimer.current), []);
+
+  // The Stackmat drives the phases itself: hands down, green, running, stopped.
+  const lastPacket = useRef<StackmatPacket | null>(null);
+  const onPacket = useCallback(
+    (packet: StackmatPacket, at: number) => {
+      const prev = lastPacket.current;
+      lastPacket.current = packet;
+      const p = phaseRef.current;
+      const running = packet.ms > 0 && (packet.status === " " || (prev !== null && packet.ms > prev.ms && packet.status !== "S"));
+      if (running) {
+        // Follow the mat's time, and let the clock face run smoothly between packets.
+        startRef.current = at - packet.ms;
+        if (p !== "running") {
+          window.clearTimeout(holdTimer.current);
+          armInspection.current = false;
+          setNow(at);
+          setPhase("running");
+        }
+        return;
+      }
+      if (p === "running") {
+        // Reset mid-solve throws the solve away; anything else stopped it.
+        return packet.status === "I" ? cancel() : stop(packet.ms);
+      }
+      const hands = packet.status === "A" ? "ready" : packet.status === "L" || packet.status === "R" || packet.status === "C" ? "holding" : null;
+      if (hands && packet.status !== prev?.status) setPhase(hands);
+      else if (!hands && (p === "holding" || p === "ready")) setPhase(inspectStartRef.current === null ? "idle" : "inspecting");
+    },
+    [cancel, setPhase, stop],
+  );
+  const stackmat = settings.input === "stackmat";
+  const connection = useStackmat(stackmat, settings.stackmatDevice || undefined, onPacket);
+
+  // Leaving Stackmat mode mid-solve leaves nothing running.
+  useEffect(() => {
+    if (!stackmat) lastPacket.current = null;
+    if (!stackmat && phaseRef.current !== "idle") cancel();
+  }, [stackmat, cancel]);
 
   const last = solves.find((s) => s.id === lastId) ?? solves.at(-1) ?? null;
   const inspecting = inspectStart !== null && phase !== "running";
@@ -305,12 +360,27 @@ export function TimerView() {
                   Delete
                 </Button>
               </>
+            ) : stackmat ? (
+              <p className="text-sm text-muted-foreground">Put both hands on the mat until it turns green, then lift them to start.</p>
             ) : (
               <p className="text-sm text-muted-foreground">
                 Hold <Kbd>Space</Kbd> until the time turns green, then let go to start. Any key stops it.
               </p>
             )}
           </div>
+          {stackmat && (
+            <p
+              className={cn(
+                "mt-1 flex items-center gap-2 text-sm",
+                connection === "connected" || connection === "starting" ? "text-muted-foreground" : "text-missed",
+                hideWhileTiming,
+              )}
+              aria-live="polite"
+            >
+              <span aria-hidden="true" className={cn("size-2 rounded-full", connection === "connected" ? "bg-learned" : "bg-missed")} />
+              {CONNECTION[connection]}
+            </p>
+          )}
           {last && (
             <div className={cn("mt-1 flex items-center gap-1", hideWhileTiming)} onPointerDown={(e) => e.stopPropagation()}>
               <CasePicker solve={last} step="oll" />
@@ -336,28 +406,68 @@ export function TimerView() {
 function TimerSettingsButton({ settings }: { settings: TimerSettings }) {
   const row = "flex items-center justify-between gap-4";
   const item = "px-2.5 aria-pressed:bg-foreground aria-pressed:text-background";
+  const [open, setOpen] = useState(false);
+  // Device names only show once the microphone is allowed, so look again on each open.
+  const inputs = useAudioInputs(open && settings.input);
+  const devices = [{ value: "", label: "Default input" }, ...inputs.map((d) => ({ value: d.id, label: d.label }))];
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger render={<Button variant="ghost" size="sm" className="text-muted-foreground" />}>
         <Settings2Icon data-icon="inline-start" />
         Settings
       </PopoverTrigger>
       <PopoverContent className="w-80 gap-4 p-4">
         <div className={row}>
-          <span className="text-sm font-medium">Hold to start</span>
+          <span className="text-sm font-medium">Timer</span>
           <ToggleGroup
-            value={[String(settings.holdMs)]}
-            onValueChange={(v) => v[0] && updateTimerSettings({ holdMs: Number(v[0]) })}
+            value={[settings.input]}
+            onValueChange={(v) => v[0] && updateTimerSettings({ input: v[0] as TimerSettings["input"] })}
             variant="outline"
             size="sm"
             spacing={0}
-            aria-label="Hold to start"
+            aria-label="Timer"
           >
-            <ToggleGroupItem value="0" className={item}>Off</ToggleGroupItem>
-            <ToggleGroupItem value="300" className={item}>0.3 s</ToggleGroupItem>
-            <ToggleGroupItem value="550" className={item}>0.55 s</ToggleGroupItem>
+            <ToggleGroupItem value="keyboard" className={item}>Keyboard</ToggleGroupItem>
+            <ToggleGroupItem value="stackmat" className={item}>Stackmat</ToggleGroupItem>
           </ToggleGroup>
         </div>
+        {settings.input === "stackmat" && (
+          <div className="flex flex-col gap-2">
+            <span className="text-sm font-medium">Stackmat input</span>
+            <Select items={devices} value={settings.stackmatDevice} onValueChange={(v) => updateTimerSettings({ stackmatDevice: (v as string | null) ?? "" })}>
+              <SelectTrigger className="h-9 w-full" aria-label="Stackmat input">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {devices.map((d) => (
+                  <SelectItem key={d.value} value={d.value}>
+                    {d.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              Plug the timer&apos;s data port into a microphone or line-in jack (or a USB sound card). It reads the signal as audio.
+            </p>
+          </div>
+        )}
+        {settings.input === "keyboard" && (
+          <div className={row}>
+            <span className="text-sm font-medium">Hold to start</span>
+            <ToggleGroup
+              value={[String(settings.holdMs)]}
+              onValueChange={(v) => v[0] && updateTimerSettings({ holdMs: Number(v[0]) })}
+              variant="outline"
+              size="sm"
+              spacing={0}
+              aria-label="Hold to start"
+            >
+              <ToggleGroupItem value="0" className={item}>Off</ToggleGroupItem>
+              <ToggleGroupItem value="300" className={item}>0.3 s</ToggleGroupItem>
+              <ToggleGroupItem value="550" className={item}>0.55 s</ToggleGroupItem>
+            </ToggleGroup>
+          </div>
+        )}
         <div className={row}>
           <span className="text-sm font-medium">15 s inspection</span>
           <ToggleGroup
@@ -387,7 +497,8 @@ function TimerSettingsButton({ settings }: { settings: TimerSettings }) {
           </ToggleGroup>
         </div>
         <p className="text-xs leading-relaxed text-muted-foreground">
-          With inspection on, tap Space to start the 15 s countdown, then hold to start. Starting after 15 s adds +2, after 17 s is a DNF.
+          With inspection on, tap Space to start the 15 s countdown, then {settings.input === "stackmat" ? "start the mat" : "hold to start"}. Starting
+          after 15 s adds +2, after 17 s is a DNF.
         </p>
       </PopoverContent>
     </Popover>

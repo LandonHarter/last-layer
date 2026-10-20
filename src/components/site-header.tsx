@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Grid3x3Icon, TimerIcon } from "lucide-react";
+import { AccountMenu } from "@/components/account-menu";
 import { BackupMenu } from "@/components/backup-menu";
 import { ThemeSelector } from "@/components/theme-selector";
 import { MODE_HOME, modeForPath, setStoredMode, useStoredMode, type Mode } from "@/lib/mode";
@@ -92,6 +93,7 @@ export function SiteHeader() {
         <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
           <BackupMenu />
           <ThemeSelector />
+          <AccountMenu />
         </div>
       </div>
     </header>
