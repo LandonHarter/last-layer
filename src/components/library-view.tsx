@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { saveLibrarySpot, takeLibraryScroll } from "@/lib/library-return";
 import { entryFor, STATUS_LABELS, useProgress, type Progress, type Status } from "@/lib/progress";
 import { setPuzzle, usePuzzle } from "@/lib/puzzle-choice";
 import { HEADLINES, PUZZLE_NAMES, PUZZLES, setLabel, setsOf, type Puzzle } from "@/lib/puzzles";
@@ -110,8 +111,27 @@ export function LibraryView({ initial = DEFAULT_FILTERS, syncUrl = false }: { in
     if (initial.puzzle) setPuzzle(initial.puzzle);
   }, [initial.puzzle]);
 
+  // Back to library from a case puts you where you were; keep that spot up to date as you scroll.
   useEffect(() => {
-    if (syncUrl) writeFilters({ puzzle, query: deferredQuery, set, status, group });
+    if (!syncUrl) return;
+    const y = takeLibraryScroll();
+    if (y !== null) window.scrollTo(0, y);
+    let frame = 0;
+    const onScroll = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(saveLibrarySpot);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", onScroll);
+    };
+  }, [syncUrl]);
+
+  useEffect(() => {
+    if (!syncUrl) return;
+    writeFilters({ puzzle, query: deferredQuery, set, status, group });
+    saveLibrarySpot();
   }, [syncUrl, puzzle, deferredQuery, set, status, group]);
 
   function choosePuzzle(next: Puzzle) {

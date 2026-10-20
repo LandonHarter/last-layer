@@ -137,8 +137,8 @@ export function netOf(state: Sticker[]): Record<Face, Face[]> {
 
 /** The same net for any cube size, or null when the scramble doesn't parse. */
 export function scrambledNetN(scramble: string, n: number): Record<Face, Face[]> | null {
-  if (n === 3) return scrambledNet(scramble);
   try {
+    if (n === 3) return scrambledNet(scramble);
     const state = applyMoves(solvedState(n), scramble, n);
     const net = {} as Record<Face, Face[]>;
     for (const face of NXN_FACES) net[face] = faceStickers(state, n, face).map((c) => NXN_FACES[c]);

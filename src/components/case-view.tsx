@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowLeftIcon, ChevronLeftIcon, ChevronRightIcon, RefreshCwIcon } from "lucide-react";
 import { toast } from "sonner";
 import { ALGS, ALGS_BY_ID, type Alg } from "@/data/algs";
@@ -15,6 +16,7 @@ import { fitAlg, isValidNotation } from "@/lib/cases";
 import { moveCount, type Notation } from "@/lib/notation";
 import { addCustom, allAlgs, entryFor, mainAlg, removeCustom, setMain, useProgress } from "@/lib/progress";
 import { EXAMPLE_ALG, HOLD, notationOf, PUZZLE_NAMES, SET_INFO, setLabel } from "@/lib/puzzles";
+import { libraryReturnUrl } from "@/lib/library-return";
 import { makeSetup } from "@/lib/setup";
 import { cn } from "@/lib/utils";
 
@@ -31,11 +33,24 @@ export function CaseView({ id }: { id: string }) {
   const prev = inSet[index - 1];
   const next = inSet[index + 1];
 
+  const router = useRouter();
+  const libraryUrl = alg.puzzle === "3x3" ? "/" : `/?puzzle=${alg.puzzle}`;
+
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-4 py-6 sm:px-6 md:py-10">
       <nav className="flex flex-wrap items-center justify-between gap-3 text-sm" aria-label="Cases">
         <div className="flex items-center gap-2">
-          <Link href={alg.puzzle === "3x3" ? "/" : `/?puzzle=${alg.puzzle}`} className={buttonVariants({ variant: "outline" })}>
+          <Link
+            href={libraryUrl}
+            className={buttonVariants({ variant: "outline" })}
+            onClick={(e) => {
+              // A new-tab click opens the plain Library; a plain click goes back to your filters and scroll.
+              if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+              e.preventDefault();
+              const saved = libraryReturnUrl(alg.puzzle);
+              router.push(saved ?? libraryUrl, { scroll: !saved });
+            }}
+          >
             <ArrowLeftIcon data-icon="inline-start" />
             Back to library
           </Link>

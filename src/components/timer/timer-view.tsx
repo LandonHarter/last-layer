@@ -63,7 +63,10 @@ export function TimerView() {
 
   const [phase, setPhaseState] = useState<Phase>("idle");
   const [now, setNow] = useState(0);
-  const [scramble, setScramble] = useState("");
+  // Kept with the puzzle it was made for: after a session switch, the old one must not be drawn as the new puzzle.
+  const [scrambled, setScrambled] = useState({ puzzle, text: "" });
+  const scramble = scrambled.puzzle === puzzle ? scrambled.text : "";
+  const newScramble = useCallback((p: TimerPuzzle) => setScrambled({ puzzle: p, text: scrambleFor(p) }), []);
   const [lastId, setLastId] = useState<string | null>(null);
   const [inspectStart, setInspectStartState] = useState<number | null>(null);
 
@@ -92,7 +95,7 @@ export function TimerView() {
 
   // Scrambles are random, so make the first one on the client to keep hydration stable.
   // A session on another puzzle needs a scramble for that puzzle.
-  useEffect(() => setScramble(scrambleFor(puzzle)), [puzzle]);
+  useEffect(() => newScramble(puzzle), [puzzle, newScramble]);
 
   // Hide the rest of the page while inspecting or solving.
   useEffect(() => {
@@ -148,8 +151,8 @@ export function TimerView() {
       inspectionMs,
     });
     setLastId(solve.id);
-    setScramble(scrambleFor(puzzleRef.current));
-  }, [setPhase, setInspectStart]);
+    newScramble(puzzleRef.current);
+  }, [setPhase, setInspectStart, newScramble]);
 
   // Press: start holding (or inspection). Release: start the clock if it's ready.
   const press = useCallback(() => {
@@ -339,7 +342,7 @@ export function TimerView() {
           </div>
           <div className="flex flex-wrap items-center justify-center gap-2">
             <SessionPicker />
-            <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => setScramble(scrambleFor(puzzle))}>
+            <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => newScramble(puzzle)}>
               <RefreshCwIcon data-icon="inline-start" />
               New scramble
             </Button>
