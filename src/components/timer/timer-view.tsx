@@ -9,6 +9,7 @@ import { SessionPicker } from "@/components/timer/session-picker";
 import { SolveList } from "@/components/timer/solve-list";
 import { CasePicker } from "@/components/timer/case-picker";
 import { PenaltyToggle } from "@/components/timer/penalty-toggle";
+import { AddTimeButton, TypedClock, type TypedTime } from "@/components/timer/add-time";
 import { SessionStats } from "@/components/timer/session-stats";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
@@ -154,8 +155,20 @@ export function TimerView() {
     newScramble(puzzleRef.current);
   }, [setPhase, setInspectStart, newScramble]);
 
+  /** Save a time typed in by hand, against the scramble on screen. */
+  const addTyped = useCallback(
+    (t: TypedTime) => {
+      const solve = addSolve({ ...t, scramble: scrambleRef.current, at: Date.now() });
+      setLastId(solve.id);
+      newScramble(puzzleRef.current);
+      toast(`Added ${formatSolve(solve)}`, { action: { label: "Undo", onClick: () => deleteSolve(solve.id) } });
+    },
+    [newScramble],
+  );
+
   // Press: start holding (or inspection). Release: start the clock if it's ready.
   const press = useCallback(() => {
+    if (settingsRef.current.input === "typing") return;
     const p = phaseRef.current;
     const stackmat = settingsRef.current.input === "stackmat";
     if (p === "running") return stackmat ? undefined : stop();
@@ -168,6 +181,7 @@ export function TimerView() {
   }, [beginHold, stop]);
 
   const release = useCallback(() => {
+    if (settingsRef.current.input === "typing") return;
     if (swallowRelease.current) {
       swallowRelease.current = false;
       return;
@@ -268,13 +282,14 @@ export function TimerView() {
     [cancel, setPhase, stop],
   );
   const stackmat = settings.input === "stackmat";
+  const typing = settings.input === "typing";
   const connection = useStackmat(stackmat, settings.stackmatDevice || undefined, onPacket);
 
-  // Leaving Stackmat mode mid-solve leaves nothing running.
+  // Leaving Stackmat mode mid-solve leaves nothing running, and typing never runs the clock.
   useEffect(() => {
     if (!stackmat) lastPacket.current = null;
     if (!stackmat && phaseRef.current !== "idle") cancel();
-  }, [stackmat, cancel]);
+  }, [settings.input, stackmat, cancel]);
 
   const last = solves.find((s) => s.id === lastId) ?? solves.at(-1) ?? null;
   const inspecting = inspectStart !== null && phase !== "running";
@@ -305,6 +320,7 @@ export function TimerView() {
 
   const ao5 = averageOf(times, 5);
   const ao12 = averageOf(times, 12);
+  const clockType = "font-clock text-[clamp(5.5rem,19vw,15rem)] leading-none lg:text-[clamp(6rem,11vw,12rem)]";
   const hideWhileTiming = "transition-opacity duration-200 in-data-timing:pointer-events-none in-data-timing:opacity-0";
 
   // Big-cube and megaminx scrambles run long, so they get smaller type and scroll if they must.
@@ -346,6 +362,7 @@ export function TimerView() {
               <RefreshCwIcon data-icon="inline-start" />
               New scramble
             </Button>
+            {!typing && <AddTimeButton onAdd={addTyped} />}
             <TimerSettingsButton settings={settings} />
           </div>
         </div>
@@ -353,16 +370,15 @@ export function TimerView() {
         {/* The clock alone decides the centre; everything else hangs below it. */}
         <div className="pointer-events-none absolute inset-x-0 -top-[calc(3.5rem+1px)] bottom-0 flex items-center justify-center">
           <div className="relative">
-            <output
-              aria-live="off"
-              aria-label="Time"
-              className={cn(
-                "font-clock block text-center text-[clamp(5.5rem,19vw,15rem)] leading-none whitespace-nowrap transition-colors duration-100 lg:text-[clamp(6rem,11vw,12rem)]",
-                faceColor,
-              )}
-            >
-              {face}
-            </output>
+            {typing ? (
+              <div className="pointer-events-auto" onPointerDown={(e) => e.stopPropagation()}>
+                <TypedClock onAdd={addTyped} last={last ? formatSolve(last) : formatMs(0)} className={clockType} />
+              </div>
+            ) : (
+              <output aria-live="off" aria-label="Time" className={cn(clockType, "block text-center whitespace-nowrap transition-colors duration-100", faceColor)}>
+                {face}
+              </output>
+            )}
             <div className={cn("absolute top-full left-1/2 flex w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-col items-center", hideWhileTiming)}>
               <p className="mt-6 flex gap-8 text-lg tabular-nums text-muted-foreground sm:text-xl" aria-live="polite">
                 <span>
@@ -380,7 +396,7 @@ export function TimerView() {
                       Delete
                     </Button>
                   </>
-                ) : stackmat ? (
+                ) : typing ? null : stackmat ? (
                   <p className="text-sm text-muted-foreground">Put both hands on the mat until it turns green, then lift them to start.</p>
                 ) : (
                   <p className="text-sm text-muted-foreground">
@@ -458,6 +474,7 @@ function TimerSettingsButton({ settings }: { settings: TimerSettings }) {
           >
             <ToggleGroupItem value="keyboard" className={item}>Keyboard</ToggleGroupItem>
             <ToggleGroupItem value="stackmat" className={item}>Stackmat</ToggleGroupItem>
+            <ToggleGroupItem value="typing" className={item}>Typing</ToggleGroupItem>
           </ToggleGroup>
         </div>
         {settings.input === "stackmat" && (
@@ -497,38 +514,47 @@ function TimerSettingsButton({ settings }: { settings: TimerSettings }) {
             </ToggleGroup>
           </div>
         )}
-        <div className={row}>
-          <span className="text-sm font-medium">15 s inspection</span>
-          <ToggleGroup
-            value={[settings.inspection ? "on" : "off"]}
-            onValueChange={(v) => v[0] && updateTimerSettings({ inspection: v[0] === "on" })}
-            variant="outline"
-            size="sm"
-            spacing={0}
-            aria-label="Inspection"
-          >
-            <ToggleGroupItem value="off" className={item}>Off</ToggleGroupItem>
-            <ToggleGroupItem value="on" className={item}>On</ToggleGroupItem>
-          </ToggleGroup>
-        </div>
-        <div className={row}>
-          <span className="text-sm font-medium">Time while solving</span>
-          <ToggleGroup
-            value={[settings.showRunning ? "show" : "hide"]}
-            onValueChange={(v) => v[0] && updateTimerSettings({ showRunning: v[0] === "show" })}
-            variant="outline"
-            size="sm"
-            spacing={0}
-            aria-label="Time while solving"
-          >
-            <ToggleGroupItem value="show" className={item}>Show</ToggleGroupItem>
-            <ToggleGroupItem value="hide" className={item}>Hide</ToggleGroupItem>
-          </ToggleGroup>
-        </div>
-        <p className="text-xs leading-relaxed text-muted-foreground">
-          With inspection on, tap Space to start the 15 s countdown, then {settings.input === "stackmat" ? "start the mat" : "hold to start"}. Starting
-          after 15 s adds +2, after 17 s is a DNF.
-        </p>
+        {settings.input === "typing" && (
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            Time with any clock, then type the result where the time goes and press Enter. 1234 is 12.34, 110234 is 11:02.34.
+          </p>
+        )}
+        {settings.input !== "typing" && (
+          <>
+            <div className={row}>
+              <span className="text-sm font-medium">15 s inspection</span>
+              <ToggleGroup
+                value={[settings.inspection ? "on" : "off"]}
+                onValueChange={(v) => v[0] && updateTimerSettings({ inspection: v[0] === "on" })}
+                variant="outline"
+                size="sm"
+                spacing={0}
+                aria-label="Inspection"
+              >
+                <ToggleGroupItem value="off" className={item}>Off</ToggleGroupItem>
+                <ToggleGroupItem value="on" className={item}>On</ToggleGroupItem>
+              </ToggleGroup>
+            </div>
+            <div className={row}>
+              <span className="text-sm font-medium">Time while solving</span>
+              <ToggleGroup
+                value={[settings.showRunning ? "show" : "hide"]}
+                onValueChange={(v) => v[0] && updateTimerSettings({ showRunning: v[0] === "show" })}
+                variant="outline"
+                size="sm"
+                spacing={0}
+                aria-label="Time while solving"
+              >
+                <ToggleGroupItem value="show" className={item}>Show</ToggleGroupItem>
+                <ToggleGroupItem value="hide" className={item}>Hide</ToggleGroupItem>
+              </ToggleGroup>
+            </div>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              With inspection on, tap Space to start the 15 s countdown, then {settings.input === "stackmat" ? "start the mat" : "hold to start"}. Starting
+              after 15 s adds +2, after 17 s is a DNF.
+            </p>
+          </>
+        )}
       </PopoverContent>
     </Popover>
   );

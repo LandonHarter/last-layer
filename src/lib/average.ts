@@ -1,4 +1,38 @@
+import type { Penalty } from "./solves";
 import { DNF, trimmedAverage } from "./stats";
+
+/**
+ * One time typed into the timer: "12.34", "1:02.34", "12.34+" (+2), "DNF",
+ * or digits only like a csTimer typing pad, where the last two are hundredths
+ * and the two before seconds: "1234" is 12.34, "110234" is 11:02.34.
+ * DNF may carry the time it would have been: "DNF(1:02.34)". Null if it doesn't parse.
+ */
+export function parseTypedTime(text: string): { ms: number; penalty: Penalty } | null {
+  const t = text.trim().replace(/\s+/g, "");
+  const dnf = /^dnf(?:\((.*)\))?$/i.exec(t);
+  if (dnf) {
+    if (!dnf[1]) return { ms: 0, penalty: "dnf" };
+    const inner = parseTypedTime(dnf[1]);
+    return inner && inner.penalty === "none" ? { ms: inner.ms, penalty: "dnf" } : null;
+  }
+  const plus = t.endsWith("+");
+  const body = plus ? t.slice(0, -1) : t;
+  let ms: number;
+  if (/^\d+$/.test(body)) {
+    const n = body.padStart(3, "0");
+    const cs = Number(n.slice(-2));
+    const sec = Number(n.slice(-4, -2));
+    const min = Number(n.slice(0, -4) || "0");
+    if (n.length > 4 && sec >= 60) return null;
+    ms = (min * 60 + sec) * 1000 + cs * 10;
+  } else {
+    const m = /^(?:(\d+):)?(\d+(?:\.\d*)?|\.\d+)$/.exec(body);
+    if (!m || (m[1] && Number(m[2]) >= 60)) return null;
+    ms = Math.round(((m[1] ? Number(m[1]) * 60 : 0) + Number(m[2])) * 1000);
+  }
+  if (ms <= 0) return null;
+  return { ms, penalty: plus ? "+2" : "none" };
+}
 
 /**
  * Times typed by hand: "12.34", "1:02.5", "DNF", "12.34+" (a +2, which adds

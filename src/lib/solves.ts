@@ -46,8 +46,8 @@ export type TimerSettings = {
   inspection: boolean;
   /** Show the running time, or just "Solving". */
   showRunning: boolean;
-  /** Start and stop with Space (or a tap), or read a Stackmat plugged into an audio input. */
-  input: "keyboard" | "stackmat";
+  /** Start and stop with Space (or a tap), read a Stackmat plugged into an audio input, or type each time in. */
+  input: "keyboard" | "stackmat" | "typing";
   /** The audio input the Stackmat is on; empty for the default one. */
   stackmatDevice: string;
 };
