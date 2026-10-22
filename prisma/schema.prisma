@@ -122,6 +122,7 @@ model DrillAttempt {
   ms       Int
   revealed Boolean
   hinted   Boolean?
+  timed    Boolean @default(false)
   at       BigInt
   user     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 

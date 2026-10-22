@@ -38,14 +38,14 @@ export async function loadUserData(userId: string): Promise<LoadedData> {
   }
   if (drill.length) {
     data[DRILL_KEY] = drill.map(
-      (a): DrillAttempt => ({ id: a.caseId, ok: a.ok, ms: a.ms, revealed: a.revealed, at: Number(a.at), ...(a.hinted !== null && { hinted: a.hinted }) }),
+      (a): DrillAttempt => ({ id: a.caseId, ok: a.ok, ms: a.ms, revealed: a.revealed, at: Number(a.at), ...(a.hinted !== null && { hinted: a.hinted }), ...(a.timed && { timed: true }) }),
     );
   }
   return { onboarded: user?.onboarded ?? false, data };
 }
 
 const solveRow = (userId: string, s: Solve) => ({ ...s, userId, at: BigInt(s.at), inspectionMs: s.inspectionMs ?? null, oll: s.oll ?? null, pll: s.pll ?? null });
-const drillRow = (userId: string, a: DrillAttempt) => ({ userId, caseId: a.id, ok: a.ok, ms: a.ms, revealed: a.revealed, hinted: a.hinted ?? null, at: BigInt(a.at) });
+const drillRow = (userId: string, a: DrillAttempt) => ({ userId, caseId: a.id, ok: a.ok, ms: a.ms, revealed: a.revealed, hinted: a.hinted ?? null, timed: a.timed ?? false, at: BigInt(a.at) });
 
 function docEntries(docs: Record<string, unknown>): [string, Prisma.InputJsonValue][] {
   const entries: [string, Prisma.InputJsonValue][] = [];

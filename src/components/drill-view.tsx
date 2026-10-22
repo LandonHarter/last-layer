@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { LightbulbIcon, PencilIcon, RefreshCwIcon } from "lucide-react";
+import { EyeOffIcon, LightbulbIcon, PencilIcon, RefreshCwIcon } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { ALGS, ALGS_BY_ID, SETS, type AlgSet } from "@/data/algs";
@@ -16,20 +16,25 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { entryFor, getProgress, mainAlg, recordAttempt, setStatus, useProgress, type Progress } from "@/lib/progress";
 import { pickNext, STATUS_WEIGHT } from "@/lib/scheduler";
 import { makeSetup } from "@/lib/setup";
-import { logDrillAttempt } from "@/lib/solves";
+import { formatMs, logDrillAttempt } from "@/lib/solves";
 import { setPuzzle, usePuzzle } from "@/lib/puzzle-choice";
 import { HOLD, PUZZLE_NAMES, setLabel, setsOf, type Puzzle } from "@/lib/puzzles";
 import { createStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
 type StatusFilter = "learning" | "learned" | "both";
-/** Sets you've picked, across every puzzle, so each puzzle remembers its own. */
-type DrillFilter = { sets: AlgSet[]; status: StatusFilter };
+/** Sets you've picked, across every puzzle, so each puzzle remembers its own. `timed` hides the case and times you. */
+type DrillFilter = { sets: AlgSet[]; status: StatusFilter; timed?: boolean };
 
 const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
   { value: "learning", label: "In progress" },
   { value: "learned", label: "Learned" },
   { value: "both", label: "Both" },
+];
+
+const MODES = [
+  { value: "image", label: "With image" },
+  { value: "timed", label: "Timed, no image" },
 ];
 
 const filterStore = createStore<DrillFilter>("last-layer:drill-filter:v1", { sets: [...SETS], status: "learning" });
@@ -132,6 +137,31 @@ export function DrillView() {
           </ToggleGroup>
         </div>
 
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span className="text-sm font-semibold">Mode</span>
+            <ToggleGroup
+              value={[filter.timed ? "timed" : "image"]}
+              onValueChange={(v) => v[0] && filterStore.write({ ...stored, timed: v[0] === "timed" })}
+              variant="outline"
+              spacing={0}
+              aria-label="Drill mode"
+            >
+              {MODES.map((m) => (
+                <ToggleGroupItem key={m.value} value={m.value} className="px-3 font-semibold aria-pressed:bg-foreground aria-pressed:text-background">
+                  {m.label}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          </div>
+          {filter.timed && (
+            <p className="text-sm text-muted-foreground">
+              You only get the setup moves. Press Set up once the cube is ready, then solve it and press Done. The time covers
+              recognition and execution, from however you hold the cube.
+            </p>
+          )}
+        </div>
+
         <dl className="grid grid-cols-2 gap-3">
           <div className={cn("rounded-lg bg-muted p-4 transition-opacity", !includes("learning") && "opacity-40")}>
             <dt className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -169,6 +199,8 @@ export function DrillView() {
 }
 
 type SessionState = { current: string; setup: string; recent: string[]; done: number; missed: number };
+/** Where a timed drill is: doing the setup, solving with the clock running, or answering. */
+type TimedPhase = "setup" | "timing" | "done";
 
 /** A fresh setup for the case, built around the algorithm you use for it. */
 function setupFor(id: string): string {
@@ -190,6 +222,10 @@ function Session({
   const [revealed, setRevealed] = useState(false);
   const [hinted, setHinted] = useState(false);
   const [editingNotes, setEditingNotes] = useState(false);
+  const timed = filter.timed === true;
+  const [phase, setPhase] = useState<TimedPhase>("setup");
+  const [startedAt, setStartedAt] = useState(0);
+  const [elapsed, setElapsed] = useState(0);
   const alg = ALGS_BY_ID.get(session.current)!;
   // When this case appeared, for the answer time in Analyze.
   const shownAt = useRef(0);
@@ -201,12 +237,33 @@ function Session({
   const notes = entry.notes?.trim();
   const allCount = alg.algs.length + (entry.custom?.length ?? 0);
   const reroll = useCallback(() => setSession({ ...session, setup: setupFor(alg.id) }), [alg.id, session, setSession]);
+  // A timed drill hides the case until you stop the clock, then shows everything at once.
+  const shown = revealed || (timed && phase === "done");
+  const canAnswer = !timed || phase === "done";
+  const startTimer = useCallback(() => {
+    setStartedAt(performance.now());
+    setPhase("timing");
+  }, []);
+  const stopTimer = useCallback(() => {
+    setElapsed(performance.now() - startedAt);
+    setPhase("done");
+  }, [startedAt]);
+
+  // Fade the header while the clock runs, as on the Timer.
+  useEffect(() => {
+    if (phase !== "timing") return;
+    const root = document.documentElement;
+    root.setAttribute("data-timing", "");
+    return () => root.removeAttribute("data-timing");
+  }, [phase]);
 
   const answer = useCallback(
     (success: boolean) => {
+      if (!canAnswer) return;
       const wasLearned = entryFor(getProgress(), alg.id).status === "learned";
       recordAttempt(alg.id, success);
-      logDrillAttempt({ id: alg.id, ok: success, ms: Math.round(performance.now() - shownAt.current), revealed, hinted, at: Date.now() });
+      const ms = timed ? elapsed : performance.now() - shownAt.current;
+      logDrillAttempt({ id: alg.id, ok: success, ms: Math.round(ms), revealed, hinted, ...(timed && { timed: true }), at: Date.now() });
       if (!success && wasLearned) {
         toast(`Missed ${alg.name}`, {
           description: "It's marked Learned. Move it back to get more practice?",
@@ -217,6 +274,7 @@ function Session({
       setRevealed(false);
       setHinted(false);
       setEditingNotes(false);
+      setPhase("setup");
       if (!next) return setSession(null);
       setSession({
         current: next,
@@ -226,7 +284,7 @@ function Session({
         missed: session.missed + (success ? 0 : 1),
       });
     },
-    [alg, revealed, hinted, session, filter, setSession],
+    [alg, canAnswer, timed, elapsed, revealed, hinted, session, filter, setSession],
   );
 
   useEffect(() => {
@@ -234,25 +292,34 @@ function Session({
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       const target = e.target instanceof Element ? e.target : null;
       if (target?.closest("input, textarea, [role=listbox]")) return;
+      if (timed && phase === "timing") {
+        // Any key stops the clock, like a timer.
+        if (e.repeat) return;
+        e.preventDefault();
+        if (e.key === "Escape") setSession(null);
+        else stopTimer();
+        return;
+      }
       if (e.key === " " || e.key === "Enter") {
         if (target?.closest("button, a")) return;
         e.preventDefault();
-        setRevealed(true);
+        if (!timed) setRevealed(true);
+        else if (phase === "setup" && !e.repeat) startTimer();
       } else if (e.key === "j" || e.key === "ArrowLeft") {
         answer(false);
       } else if (e.key === "k" || e.key === "ArrowRight") {
         answer(true);
       } else if (e.key === "h") {
-        if (notes) setHinted(true);
+        if (notes && !timed) setHinted(true);
       } else if (e.key === "n") {
-        reroll();
+        if (!timed || phase === "setup") reroll();
       } else if (e.key === "Escape") {
         setSession(null);
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [answer, notes, reroll, setSession]);
+  }, [answer, notes, reroll, setSession, timed, phase, startTimer, stopTimer]);
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6 sm:px-6 md:py-10">
@@ -275,32 +342,52 @@ function Session({
           key={alg.id}
           className="mx-auto w-full max-w-64 animate-in rounded-2xl bg-muted p-5 duration-200 fade-in-0 sm:max-w-sm md:max-w-none md:p-10"
         >
-          <CaseImage alg={alg} className="w-full" />
+          {timed && phase !== "done" ? (
+            <div className="flex aspect-square w-full flex-col items-center justify-center gap-3 text-center text-sm text-muted-foreground">
+              <EyeOffIcon className="size-8" aria-hidden />
+              Hidden until you stop the clock
+            </div>
+          ) : (
+            <CaseImage alg={alg} className="w-full" />
+          )}
         </div>
 
         <div className="flex flex-col gap-7">
-          <section aria-labelledby="setup-label">
-            <div className="mb-2 flex items-center justify-between gap-3">
-              <h2 id="setup-label" className="text-sm font-semibold text-muted-foreground">
-                Set up from solved, {HOLD[alg.puzzle]}
+          {timed && phase !== "setup" ? (
+            <section aria-label="Time" className="flex flex-col gap-1">
+              <h2 className="text-sm font-semibold text-muted-foreground">
+                {phase === "timing" ? "Recognize and solve" : "Recognition and execution"}
               </h2>
-              <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={reroll}>
-                <RefreshCwIcon data-icon="inline-start" />
-                New setup <Kbd className="ml-1 hidden sm:inline-flex">N</Kbd>
-              </Button>
-            </div>
-            <MoveSequence
-              key={session.setup}
-              alg={session.setup}
-              className="animate-in text-[clamp(1.35rem,2.8vw,2.1rem)] leading-tight tracking-tight duration-200 fade-in-0"
-            />
-          </section>
+              {phase === "timing" ? (
+                <RunningClock since={startedAt} />
+              ) : (
+                <p className="font-clock text-[clamp(3rem,8vw,5.5rem)] leading-none tabular-nums">{formatMs(elapsed)}</p>
+              )}
+            </section>
+          ) : (
+            <section aria-labelledby="setup-label">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <h2 id="setup-label" className="text-sm font-semibold text-muted-foreground">
+                  Set up from solved, {HOLD[alg.puzzle]}
+                </h2>
+                <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={reroll}>
+                  <RefreshCwIcon data-icon="inline-start" />
+                  New setup <Kbd className="ml-1 hidden sm:inline-flex">N</Kbd>
+                </Button>
+              </div>
+              <MoveSequence
+                key={session.setup}
+                alg={session.setup}
+                className="animate-in text-[clamp(1.35rem,2.8vw,2.1rem)] leading-tight tracking-tight duration-200 fade-in-0"
+              />
+            </section>
+          )}
 
           <section aria-labelledby="answer-label" className="rounded-xl border border-border bg-card p-5">
             <h2 id="answer-label" className="sr-only">
               Algorithm
             </h2>
-            {revealed ? (
+            {shown ? (
               <div className="flex flex-col gap-4 animate-in duration-200 fade-in-0">
                 <div className="flex flex-wrap items-baseline gap-x-3">
                   <span className="text-2xl font-extrabold">{alg.name}</span>
@@ -323,6 +410,16 @@ function Session({
                 )}
                 <StatusToggle id={alg.id} status={entry.status} size="default" className="max-w-md" />
               </div>
+            ) : timed ? (
+              phase === "setup" ? (
+                <Button size="lg" className="h-12 w-full text-base font-bold" onClick={startTimer}>
+                  Set up, start the clock <Kbd className="ml-1 hidden bg-black/15 text-inherit sm:inline-flex">Space</Kbd>
+                </Button>
+              ) : (
+                <Button size="lg" className="h-20 w-full text-lg font-bold" onClick={stopTimer}>
+                  Done <Kbd className="ml-1 hidden bg-black/15 text-inherit sm:inline-flex">Any key</Kbd>
+                </Button>
+              )
             ) : (
               <div className="flex flex-col gap-4">
                 {hinted && (notes || editingNotes) && <Notes id={alg.id} notes={entry.notes} editing={editingNotes} setEditing={setEditingNotes} />}
@@ -346,6 +443,7 @@ function Session({
               size="lg"
               variant="outline"
               className="h-14 border-missed/40 text-base font-bold text-missed hover:bg-missed/10 hover:text-missed"
+              disabled={!canAnswer}
               onClick={() => answer(false)}
             >
               Missed <Kbd className="ml-1 hidden sm:inline-flex">J</Kbd>
@@ -353,6 +451,7 @@ function Session({
             <Button
               size="lg"
               className={cn("h-14 bg-learned text-base font-bold text-learned-foreground hover:bg-learned/85")}
+              disabled={!canAnswer}
               onClick={() => answer(true)}
             >
               Got it <Kbd className="ml-1 hidden bg-black/15 text-inherit sm:inline-flex">K</Kbd>
@@ -361,6 +460,23 @@ function Session({
         </div>
       </div>
     </div>
+  );
+}
+
+/** The drill clock while it runs. */
+function RunningClock({ since }: { since: number }) {
+  const [now, setNow] = useState(since);
+  useEffect(() => {
+    let frame = requestAnimationFrame(function tick() {
+      setNow(performance.now());
+      frame = requestAnimationFrame(tick);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, []);
+  return (
+    <p className="font-clock text-[clamp(3rem,8vw,5.5rem)] leading-none tabular-nums" role="timer">
+      {formatMs(Math.max(0, now - since), 1)}
+    </p>
   );
 }
 

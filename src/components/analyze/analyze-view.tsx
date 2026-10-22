@@ -267,6 +267,7 @@ function DrillAnalysis() {
               Case: alg ? caseLabel(alg) : a.id,
               Result: a.ok ? "Got it" : "Missed",
               Revealed: a.revealed ? "Revealed" : "Not revealed",
+              Mode: a.timed ? "Timed, no image" : "With image",
               ...timeGroups(a.at),
             },
           };

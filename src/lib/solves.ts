@@ -180,12 +180,14 @@ export type DrillAttempt = {
   /** Case id, like `pll-t`. */
   id: string;
   ok: boolean;
-  /** From the case appearing to the answer, in ms. */
+  /** From the case appearing to the answer, in ms. Timed drills: from "Set up" to "Done", recognition plus execution. */
   ms: number;
   /** Whether the algorithm was revealed before answering. */
   revealed: boolean;
   /** Whether your notes were shown as a hint before answering. */
   hinted?: boolean;
+  /** Whether it was a timed drill, with the case image hidden. */
+  timed?: boolean;
   at: number;
 };
 

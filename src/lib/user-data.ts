@@ -94,7 +94,7 @@ export function cleanSolve(v: unknown): Solve | null {
 export function cleanDrillAttempt(v: unknown): DrillAttempt | null {
   const a = v as Partial<DrillAttempt> | null;
   if (!a || !str(a.id, 50) || !a.id || typeof a.ok !== "boolean" || !time(a.ms) || !time(a.at)) return null;
-  return { id: a.id, ok: a.ok, ms: ms(a.ms), revealed: a.revealed === true, hinted: typeof a.hinted === "boolean" ? a.hinted : undefined, at: Math.round(a.at) };
+  return { id: a.id, ok: a.ok, ms: ms(a.ms), revealed: a.revealed === true, hinted: typeof a.hinted === "boolean" ? a.hinted : undefined, timed: a.timed === true || undefined, at: Math.round(a.at) };
 }
 
 export const cleanList = <T>(v: unknown, clean: (x: unknown) => T | null): T[] =>
