@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { applyAlg, isSolved, solvedCube } from "./cube";
 import { invertAlg } from "./notation";
+import { sq1Apply, sq1Broken, sq1Solved } from "./sq1";
 import { cubeSize, randomScramble, scrambledNet, scrambledNetN, scrambleFor, TIMER_PUZZLES } from "./scramble";
 import {
   averageOf,
@@ -106,4 +107,12 @@ test("every timer puzzle gets a scramble, and cubes of every size draw a net", (
     }
   }
   expect(scrambleFor("megaminx").split(" ").filter((m) => m.startsWith("U")).length).toBe(7);
+});
+
+test("Square-1 scrambles never turn a blocked slice", () => {
+  for (let i = 0; i < 50; i++) {
+    const s = scrambleFor("sq1");
+    expect(sq1Broken(sq1Apply(sq1Solved(), s))).toBe(false);
+    expect(s.split(" ").filter((m) => m === "/")).toHaveLength(20);
+  }
 });

@@ -2,7 +2,7 @@ import { ALGS, type Alg } from "@/data/algs";
 import { engineFor, setupWorks } from "./cases";
 import { megaWithoutRotations } from "./megaminx";
 import { faceTurnsOnly, invertAlg, moveCount, parseAlg, simplifyAlg, withoutRotations } from "./notation";
-import { setsOf, type AlgSet } from "./puzzles";
+import { CUBE_SIZE, setsOf, type AlgSet } from "./puzzles";
 
 type Random = () => number;
 
@@ -20,6 +20,7 @@ function otherAlg(target: Alg, main: string, random: Random): string {
 function clean(target: Alg, raw: string): string {
   if (target.puzzle === "3x3" || target.puzzle === "2x2") return faceTurnsOnly(raw);
   if (target.puzzle === "megaminx") return simplifyAlg(megaWithoutRotations(raw), "megaminx");
+  if (target.puzzle === "sq1") return simplifyAlg(raw, "sq1");
   return simplifyAlg(withoutRotations(raw));
 }
 
@@ -29,7 +30,8 @@ const faceOnly = (alg: string) => parseAlg(alg).every((m) => /^[RLUDFB]$/.test(m
 /** The last step on its puzzle, ending solved, so nothing from a later step can hide in the setup. */
 function endsSolved(target: Alg): boolean {
   const sets = setsOf(target.puzzle);
-  return engineFor(target).after.length > 1 && sets.indexOf(target.set) === sets.length - 1;
+  const engine = engineFor(target);
+  return engine.endsSolved || (engine.after.length > 1 && sets.indexOf(target.set) === sets.length - 1);
 }
 
 /**
@@ -42,14 +44,16 @@ function noiseFor(target: Alg): string[] {
   if (target.set === "OLL") return bank("PLL");
   const sets = setsOf(target.puzzle);
   const later = sets.slice(sets.indexOf(target.set) + 1).flatMap(bank);
-  if (target.puzzle === "3x3" || target.puzzle === "2x2" || target.puzzle === "megaminx") return later;
+  if (target.puzzle === "3x3" || target.puzzle === "2x2" || target.puzzle === "megaminx" || target.puzzle === "sq1") return later;
   return [...later, ...[...bank("OLL"), ...bank("PLL")].map(faceTurnsOnly)];
 }
 
 /** Pieces for a two-alg setup: other cases in the set, and for big-cube PLL parity the 3x3 PLLs. */
 function pairPieces(target: Alg): string[][] {
   const others = ALGS.filter((a) => a.set === target.set && a.id !== target.id).map((a) => a.algs);
-  if (target.puzzle !== "3x3" && target.puzzle !== "2x2" && target.puzzle !== "megaminx" && target.group === "PLL parity") {
+  // Square-1 parity: one parity case and one EP case make another parity case.
+  if (target.set === "sq1-parity") others.push(...ALGS.filter((a) => a.set === "sq1-EP").map((a) => a.algs));
+  if (CUBE_SIZE[target.puzzle]! > 3 && target.group === "PLL parity") {
     others.push(...ALGS.filter((a) => a.set === "PLL").map((a) => a.algs.map(faceTurnsOnly)));
   }
   return others;
@@ -64,7 +68,9 @@ function fromPair(target: Alg, main: string, random: Random): string | null {
   const fingerprint = (state: unknown) => Array.from(state as ArrayLike<number | object>, (x) => (typeof x === "object" ? JSON.stringify(x) : x)).join("|");
   // Setups that work are exactly: a turn of the top, the main undone, a turn of the top.
   const undo = invertAlg(main, engine.notation);
-  const goals = new Set(engine.before.flatMap((a) => engine.after.map((b) => fingerprint(engine.start(`${b} ${undo} ${a}`)))));
+  // A step that ends solved without turns after (the Square-1's) still allows any of its turns at the end.
+  const ends = engine.after.length > 1 ? engine.after : engine.before;
+  const goals = new Set(engine.before.flatMap((a) => ends.map((b) => fingerprint(engine.start(`${b} ${undo} ${a}`)))));
   const others = pairPieces(target);
   if (!others.length) return null;
   const hits: string[] = [];
@@ -108,6 +114,11 @@ export function makeSetup(target: Alg, main: string, random: Random = Math.rando
       const setup = clean(target, raw);
       if (setup && (target.puzzle !== "3x3" || faceOnly(setup)) && setupWorks(target, setup, main)) return setup;
     }
+  }
+  // The main undone, after whichever turn lets it start (a Square-1 alg can end at another angle, so undoing it may need one).
+  for (const before of engine.before) {
+    const setup = clean(target, `${before} ${invertAlg(main, engine.notation)}`);
+    if (setupWorks(target, setup, main)) return setup;
   }
   return clean(target, invertAlg(main, engine.notation));
 }

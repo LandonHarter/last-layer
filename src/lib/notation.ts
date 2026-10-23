@@ -1,3 +1,5 @@
+import { formatSq1, invertSq1, looksSq1, mirrorSq1, parseSq1, simplifySq1, sliceCount, sq1Tokens } from "./sq1";
+
 export type Move = {
   /** Face, slice, wide or rotation letter: R, r, Rw, 3Rw, 2R, M, x, BR (megaminx), … */
   base: string;
@@ -5,15 +7,19 @@ export type Move = {
   turns: number;
 };
 
-/** The megaminx is the one puzzle whose faces turn in fifths, so its moves parse differently. */
-export type Notation = "cube" | "megaminx";
+/**
+ * The megaminx is the one puzzle whose faces turn in fifths, so its moves
+ * parse differently. The Square-1 writes (a,b) for turns of its two layers and
+ * / for the slice; as moves, (a,b) is U by a twelfths then D by b, and / is "/".
+ */
+export type Notation = "cube" | "megaminx" | "sq1";
 
 // Cubes: outer, wide (Rw, 3Rw, r), inner slice (2R), slice and rotation moves.
 const CUBE_RE = /^(\d?[RLUDFBrludfb]w|\d?[RLUDFB]|[rludfbMESxyz])(2|')?$/;
 // Megaminx: R2 is two fifths clockwise and R2' two fifths back, so "2'" is its own suffix.
 const MEGA_RE = /^(DBR|DBL|BR|BL|DR|DL|[URFLDB]|y)(2'|2|')?$/;
 
-const ORDER: Record<Notation, number> = { cube: 4, megaminx: 5 };
+const ORDER: Record<Notation, number> = { cube: 4, megaminx: 5, sq1: 12 };
 
 /** Moves as written, one per token, with brackets dropped. */
 export function tokens(alg: string): string[] {
@@ -21,6 +27,11 @@ export function tokens(alg: string): string[] {
 }
 
 export function parseAlg(alg: string, notation: Notation = "cube"): Move[] {
+  if (notation === "sq1") {
+    return parseSq1(alg).flatMap((m) =>
+      m === "/" ? [{ base: "/", turns: 1 }] : [{ base: "U", turns: ((m.top % 12) + 12) % 12 }, { base: "D", turns: ((m.bottom % 12) + 12) % 12 }],
+    );
+  }
   const order = ORDER[notation];
   return tokens(alg).map((token) => {
     // Tolerate "2'" and "'2" which some sources use for a cube half turn.
@@ -42,10 +53,14 @@ export function formatMove({ base, turns }: Move, notation: Notation = "cube"): 
 }
 
 export function formatAlg(moves: Move[], notation: Notation = "cube"): string {
+  if (notation === "sq1") {
+    return formatSq1(moves.map((m) => (m.base === "/" ? "/" : m.base === "U" ? { top: m.turns, bottom: 0 } : { top: 0, bottom: m.turns })));
+  }
   return moves.map((m) => formatMove(m, notation)).join(" ");
 }
 
 export function invertAlg(alg: string, notation: Notation = "cube"): string {
+  if (notation === "sq1") return invertSq1(alg);
   const order = ORDER[notation];
   return formatAlg(
     parseAlg(alg, notation)
@@ -55,13 +70,14 @@ export function invertAlg(alg: string, notation: Notation = "cube"): string {
   );
 }
 
-/** The moves of an algorithm, one string each, the way they're written. */
+/** The moves of an algorithm, one string each, the way they're written. A Square-1 alg splits into (a,b) and /. */
 export function splitMoves(alg: string): string[] {
-  return tokens(alg);
+  return looksSq1(alg) ? sq1Tokens(alg) : tokens(alg);
 }
 
 /** Merge neighbouring turns of the same layer: "U U2" → "U'", "R R'" → "". */
 export function simplifyAlg(alg: string, notation: Notation = "cube"): string {
+  if (notation === "sq1") return simplifySq1(alg);
   const order = ORDER[notation];
   const out: Move[] = [];
   for (const move of parseAlg(alg, notation)) {
@@ -77,8 +93,9 @@ export function simplifyAlg(alg: string, notation: Notation = "cube"): string {
   return formatAlg(out, notation);
 }
 
-/** Number of turns, not counting whole-puzzle rotations. */
+/** Number of turns, not counting whole-puzzle rotations. A Square-1 alg counts its slices. */
 export function moveCount(alg: string): number {
+  if (looksSq1(alg)) return sliceCount(alg);
   return tokens(alg).filter((m) => !/^[xyz]/.test(m)).length;
 }
 
@@ -111,6 +128,7 @@ const MEGA_MIRROR: Record<string, string> = {
 };
 
 export function mirrorAlg(alg: string, plane: "M" | "FR", notation: Notation = "cube"): string {
+  if (notation === "sq1") return mirrorSq1(alg);
   if (notation === "megaminx") {
     return formatAlg(parseAlg(alg, notation).map(({ base, turns }) => ({ base: MEGA_MIRROR[base], turns: 5 - turns })), notation);
   }
@@ -215,3 +233,6 @@ export function withoutRotations(alg: string): string {
   }
   return formatAlg(out);
 }
+
+/** What `moveCount` counts, for labels: "moves", or "slices" on a Square-1. */
+export const countUnit = (alg: string, n: number) => (looksSq1(alg) ? (n === 1 ? "slice" : "slices") : n === 1 ? "move" : "moves");

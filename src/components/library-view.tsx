@@ -309,6 +309,8 @@ function Sections({ algs, progress, puzzle }: { algs: Alg[]; progress: Progress;
   );
 }
 
+const boardColumns = (n: number) => Math.ceil(n / Math.max(3, Math.ceil(n / 19)));
+
 /** One square per algorithm, coloured by status: progress read like a cube face. */
 function ProgressBoard({ progress, puzzle }: { progress: Progress; puzzle: Puzzle }) {
   return (
@@ -328,12 +330,13 @@ function ProgressBoard({ progress, puzzle }: { progress: Progress; puzzle: Puzzl
                 {counts.learned} learned, {counts.learning} in progress, of {algs.length}
               </span>
             </div>
-            {/* Three rows each, at the same sticker size as the widest (3x3 OLL, 19 wide): F2L 14 (41 leaves one gap), PLL 7. */}
+            {/* Three rows each, at the same sticker size as the widest (3x3 OLL, 19 wide): F2L 14 (41 leaves one gap), PLL 7.
+                Bigger sets (Square-1 cubeshape) add rows instead of growing wider. */}
             <div
               className="grid gap-[3px] rounded-md bg-foreground p-[3px]"
               style={{
-                gridTemplateColumns: `repeat(${Math.ceil(algs.length / 3)}, minmax(0, 1fr))`,
-                width: `${(Math.ceil(algs.length / 3) / 19) * 100}%`,
+                gridTemplateColumns: `repeat(${boardColumns(algs.length)}, minmax(0, 1fr))`,
+                width: `${(boardColumns(algs.length) / 19) * 100}%`,
               }}
             >
               {algs.map((a) => (

@@ -1,9 +1,9 @@
 import type { Notation } from "./notation";
 
 /** Every puzzle with algorithms in the app. */
-export type Puzzle = "2x2" | "3x3" | "4x4" | "5x5" | "6x6" | "7x7" | "megaminx";
+export type Puzzle = "2x2" | "3x3" | "4x4" | "5x5" | "6x6" | "7x7" | "megaminx" | "sq1";
 
-export const PUZZLES: Puzzle[] = ["2x2", "3x3", "4x4", "5x5", "6x6", "7x7", "megaminx"];
+export const PUZZLES: Puzzle[] = ["2x2", "3x3", "4x4", "5x5", "6x6", "7x7", "megaminx", "sq1"];
 
 export const PUZZLE_NAMES: Record<Puzzle, string> = {
   "2x2": "2x2",
@@ -13,9 +13,10 @@ export const PUZZLE_NAMES: Record<Puzzle, string> = {
   "6x6": "6x6",
   "7x7": "7x7",
   megaminx: "Megaminx",
+  sq1: "Square-1",
 };
 
-/** Cube size for the cubes; the megaminx has none. */
+/** Cube size for the cubes; the megaminx and Square-1 have none. */
 export const CUBE_SIZE: Partial<Record<Puzzle, number>> = { "2x2": 2, "3x3": 3, "4x4": 4, "5x5": 5, "6x6": 6, "7x7": 7 };
 
 export type AlgSet =
@@ -31,7 +32,13 @@ export type AlgSet =
   | "mega-EO"
   | "mega-CO"
   | "mega-EP"
-  | "mega-CP";
+  | "mega-CP"
+  | "sq1-CS"
+  | "sq1-CO"
+  | "sq1-EO"
+  | "sq1-CP"
+  | "sq1-EP"
+  | "sq1-parity";
 
 type SetInfo = {
   puzzle: Puzzle;
@@ -87,6 +94,12 @@ export const SET_INFO: Record<AlgSet, SetInfo> = {
   "mega-CO": { puzzle: "megaminx", label: "CO", title: "Orient the corners", blurb: "Second look: twist the top corners so the whole top is one colour." },
   "mega-EP": { puzzle: "megaminx", label: "EP", title: "Permute the edges", blurb: "Third look: move the top edges into place." },
   "mega-CP": { puzzle: "megaminx", label: "CP", title: "Permute the corners", blurb: "Last look: move the top corners into place." },
+  "sq1-CS": { puzzle: "sq1", label: "CS", title: "Cubeshape", blurb: "Get both layers back into squares." },
+  "sq1-CO": { puzzle: "sq1", label: "CO", title: "Orient the corners", blurb: "Put each corner on its own layer, top colour corners on top." },
+  "sq1-EO": { puzzle: "sq1", label: "EO", title: "Orient the edges", blurb: "Put each edge on its own layer, so both faces are one colour." },
+  "sq1-CP": { puzzle: "sq1", label: "CP", title: "Permute the corners", blurb: "Put the corners of both layers in order." },
+  "sq1-EP": { puzzle: "sq1", label: "EP", title: "Permute the edges", blurb: "Put the edges of both layers in order and square up the middle layer: solved." },
+  "sq1-parity": { puzzle: "sq1", label: "Parity", title: "Parity", blurb: "Cases with one swap too many, which a 3x3 couldn't have. Solve them, or turn them into an EP case." },
 };
 
 export const ALL_SETS = Object.keys(SET_INFO) as AlgSet[];
@@ -97,7 +110,10 @@ export const puzzleOf = (set: AlgSet): Puzzle => SET_INFO[set].puzzle;
 
 export const setLabel = (set: AlgSet) => SET_INFO[set].label;
 
-export const notationOf = (set: AlgSet): Notation => (SET_INFO[set].puzzle === "megaminx" ? "megaminx" : "cube");
+export const notationOf = (set: AlgSet): Notation => {
+  const puzzle = SET_INFO[set].puzzle;
+  return puzzle === "megaminx" ? "megaminx" : puzzle === "sq1" ? "sq1" : "cube";
+};
 
 /** How to hold the puzzle for a setup, written for the setup line. */
 export const HOLD: Record<Puzzle, string> = {
@@ -108,6 +124,7 @@ export const HOLD: Record<Puzzle, string> = {
   "6x6": "yellow on top, green in front",
   "7x7": "yellow on top, green in front",
   megaminx: "the last-layer face on top",
+  sq1: "yellow on top, green in front, the slice line just left of the front edge",
 };
 
 /** Placeholder for the "add your own" field. */
@@ -119,6 +136,7 @@ export const EXAMPLE_ALG: Record<Puzzle, string> = {
   "6x6": "3R2 B2 U2 3L U2 3R'",
   "7x7": "3R2 B2 U2 3L U2 3R'",
   megaminx: "R U2' R' U' R U' R'",
+  sq1: "(1,0) / (-1,0)",
 };
 
 /** The Library headline for each puzzle. */
@@ -130,4 +148,5 @@ export const HEADLINES: Record<Puzzle, string> = {
   "6x6": "6x6 parity, for both rings of wings",
   "7x7": "7x7 edge parity, for both rings of wings",
   megaminx: "The megaminx last layer in four looks",
+  sq1: "Square-1: every cubeshape case, then orient, permute and parity",
 };

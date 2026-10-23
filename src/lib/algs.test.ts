@@ -18,6 +18,7 @@ import {
 } from "./cube";
 import { faceTurnsOnly, invertAlg, mirrorAlg, parseAlg, simplifyAlg } from "./notation";
 import { makeSetup } from "./setup";
+import { shapeKey, sq1CornersPermuted, sq1CubeShape, sq1Oriented, type Sq1State } from "./sq1";
 
 const cases = ALGS.map((a) => [a.id, a] as const);
 const cube3 = cases.filter(([, a]) => a.puzzle === "3x3");
@@ -48,6 +49,15 @@ describe("notation", () => {
     expect(mirrorAlg("R U BR'", "M", "megaminx")).toBe("L' U' BL");
   });
 
+  test("Square-1 turns are twelfths, written the WCA way", () => {
+    expect(simplifyAlg("1,0/ -1,0 /", "sq1")).toBe("(1,0) / (-1,0) /");
+    expect(invertAlg("(1,0) / (-3,6) /", "sq1")).toBe("/ (3,6) / (-1,0)");
+    expect(simplifyAlg("(1,0) (2,-1) / /", "sq1")).toBe("(3,-1)");
+    expect(simplifyAlg("/ (6,6) (6,-6) /", "sq1")).toBe("");
+    expect(simplifyAlg("(7,-7)", "sq1")).toBe("(-5,5)");
+    expect(() => parseAlg("R U /", "sq1")).toThrow();
+  });
+
   test("big-cube moves keep their layers", () => {
     expect(invertAlg("3Rw U2 2R' Lw2")).toBe("Lw2 2R U2 3Rw'");
     expect(mirrorAlg("3Rw 2R' U", "M")).toBe("3Lw' 2L U'");
@@ -76,6 +86,11 @@ describe("algorithm data", () => {
     expect(ALGS.filter((a) => a.set === "mega-CO")).toHaveLength(16);
     expect(ALGS.filter((a) => a.set === "mega-EP")).toHaveLength(3);
     expect(ALGS.filter((a) => a.set === "mega-CP")).toHaveLength(15);
+    expect(ALGS.filter((a) => a.set === "sq1-CO")).toHaveLength(7);
+    expect(ALGS.filter((a) => a.set === "sq1-EO")).toHaveLength(7);
+    // Corners: solved, adjacent or opposite swap on each layer.
+    expect(ALGS.filter((a) => a.set === "sq1-CP")).toHaveLength(8);
+    expect(ALGS.filter((a) => a.set === "sq1-EP")).toHaveLength(49);
   });
 
   test("every case belongs to its puzzle's sets", () => {
@@ -94,6 +109,12 @@ describe("algorithm data", () => {
     expect(stepDone(a, engine.apply(state, a.algs[0]))).toBe(true);
     const n = CUBE_SIZE[a.puzzle];
     if (a.puzzle === "megaminx") expect(megaF2LSolved(state as Uint8Array)).toBe(true);
+    else if (a.puzzle === "sq1" && a.set !== "sq1-CS") {
+      // Every Square-1 step after cubeshape starts in cube shape, the steps before it done.
+      expect(sq1CubeShape(state as Sq1State)).toBe(true);
+      if (a.set !== "sq1-CO") expect(sq1Oriented(state as Sq1State, a.set !== "sq1-EO")).toBe(true);
+      if (a.set === "sq1-EP" || a.set === "sq1-parity") expect(sq1CornersPermuted(state as Sq1State)).toBe(true);
+    }
     else if (a.set === "2x2-OLL") expect(faceStickers(state as Uint8Array, 2, "D").every((c) => c === 1)).toBe(true);
     else if (n && n > 3 && a.group !== "No parity") expect(belowTopSolved(state as Uint8Array, n)).toBe(true);
   });
@@ -125,10 +146,19 @@ describe("algorithm data", () => {
 
   test("no two cases are the same", () => {
     for (const set of new Set(ALGS.map((a) => a.set))) {
+      // One cubeshape alg can solve two shapes from different angles, so shapes are compared instead.
+      if (set === "sq1-CS") continue;
       const inSet = ALGS.filter((a) => a.set === set);
       for (const a of inSet)
         for (const b of inSet) if (a !== b && a.group === b.group) expect(fitAlg(a, b.algs[0])).toBeNull();
     }
+  });
+
+  test("every Square-1 shape has one cubeshape case", () => {
+    const shapes = ALGS.filter((a) => a.set === "sq1-CS").map((a) => shapeKey(caseState(a) as Sq1State));
+    expect(new Set(shapes).size).toBe(shapes.length);
+    // 170 shapes up to turns of the layers, less the cube itself.
+    expect(shapes).toHaveLength(169);
   });
 
   test.each(alternatives)("%s: alternative %s solves the case as pictured", (_id, alt, a) => {
@@ -196,5 +226,10 @@ describe("custom algorithms", () => {
     const megaSune = ALGS.find((a) => a.id === "mega-co-5")!;
     expect(fitAlg(megaSune, "U R U R' U R U2' R'")).not.toBeNull();
     expect(fitAlg(megaSune, "R U R' U R U2 R'")).toBeNull();
+    const sq1Opp = ALGS.find((a) => a.id === "sq1-cp-opp-opp")!;
+    // A quarter turn of both layers first is the same case seen from another side.
+    expect(fitAlg(sq1Opp, "(3,3) / (-3,3) / (3,-3) / (-3,-3)")).not.toBeNull();
+    // A slice blocked by a corner never solves anything.
+    expect(fitAlg(sq1Opp, "(1,1) / (-3,3) / (3,-3) /")).toBeNull();
   });
 });

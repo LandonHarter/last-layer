@@ -73,6 +73,12 @@ const CLUSTERS: Record<AlgSet, Cluster[]> = {
   "mega-CO": groupsOf("mega-CO", (g) => `${g}: mostly Sune shapes, learned side by side`),
   "mega-EP": groupsOf("mega-EP", (g) => `${g} of edges`),
   "mega-CP": groupsOf("mega-CP", (g) => `${g} of corners`),
+  "sq1-CS": groupsOf("sq1-CS", (g) => `${g} to a cube: the same depth, so learn them side by side`),
+  "sq1-CO": groupsOf("sq1-CO", () => "Short, and built on (1,0) / (-1,0): spot how many corners are on the wrong layer"),
+  "sq1-EO": groupsOf("sq1-EO", () => "Edges to their own layer: like CO, but the edges move"),
+  "sq1-CP": groupsOf("sq1-CP", (g) => `${g}: adjacent and opposite swaps, all in (3,0) turns`),
+  "sq1-EP": groupsOf("sq1-EP", (g) => (g === "One layer" ? "One layer only: the 3x3 U, H and Z perms" : `${g}: name each layer, then put the pair together`)),
+  "sq1-parity": groupsOf("sq1-parity", () => "Parity: learn the adjacent swap first, it fixes any parity case with an EP after it"),
   PLL: [
     { ids: ["pll-ua", "pll-ub", "pll-h", "pll-z"], why: "Edges only: short M-slice algorithms and easy to spot" },
     { ids: ["pll-t", "pll-jb", "pll-ja", "pll-y"], why: "Built from the sexy move and sledgehammer, and used all the time" },

@@ -10,6 +10,7 @@ import { caseState, engineFor } from "../src/lib/cases";
 import { megaAround, megaApply, megaIdentity, megaSlot, MEGA_FACES, type MegaFace } from "../src/lib/megaminx";
 import { applyMoves, FACES, identityState, slot, solvedState, type Face } from "../src/lib/nxn";
 import { CUBE_SIZE } from "../src/lib/puzzles";
+import { sq1Arrows, sq1Colors, sq1Layer, type Sq1State } from "../src/lib/sq1";
 
 // VisualCube's colours (scheme yrgwob), so these sit well next to the 3x3 images.
 const CUBE_COLORS: Record<Face, string> = { U: "#FEFE00", R: "#EE0000", F: "#00D800", D: "#FFFFFF", L: "#FFA100", B: "#0000F2" };
@@ -301,9 +302,65 @@ function megaCase(alg: Alg): string {
   return svg("-0.9 -0.9 1.8 1.8", body);
 }
 
+// ---------------------------------------------------------------------------
+// Square-1
+
+// Cubeshape cases are about shape alone, so every piece is one plain colour.
+const SHAPE = "#A6A6A6";
+
+/**
+ * Both layers side by side: the top seen from above, the bottom seen from
+ * below (turned over left to right, so the front stays at the bottom of the
+ * picture). Each step shows only what it's about, and permutation cases get
+ * arrows. A bar under them shows the middle layer when it matters.
+ */
+function sq1Case(alg: Alg): string {
+  const state = caseState(alg) as Sq1State;
+  const set = alg.set;
+  const fill = (value: number, part: "face" | "side", corner: boolean) => {
+    const { face, side } = sq1Colors(value);
+    if (set === "sq1-CS") return part === "face" ? SHAPE : MASK;
+    if (part === "face") return set === "sq1-CO" && !corner ? MASK : CUBE_COLORS[face];
+    if (set === "sq1-CO" || set === "sq1-EO") return MASK;
+    if (set === "sq1-CP" && !corner) return MASK;
+    return CUBE_COLORS[side];
+  };
+  const scale = 0.28;
+  const body: string[] = [];
+  const arrowKind = set === "sq1-CP" ? "corners" : set === "sq1-EP" || set === "sq1-parity" ? "edges" : null;
+  const arrows = arrowKind ? sq1Arrows(state, arrowKind) : [[], []];
+  ([0, 1] as const).forEach((l) => {
+    const ox = l === 0 ? -0.46 : 0.46;
+    const at = ([x, y]: Pt): Pt => [ox + (l === 0 ? x : -x) * scale, -0.08 + y * scale];
+    const pieces = sq1Layer(state, l);
+    const centres = new Map<number, Pt>();
+    for (const p of pieces) {
+      body.push(poly({ points: p.face.map(at), fill: BODY }));
+      p.sides.forEach((side, i) => body.push(poly({ points: inset(side.map(at), 0.16), fill: fill(p.values[i], "side", p.corner) })));
+      const face = inset(p.face.map(at), 0.1);
+      body.push(poly({ points: face, fill: fill(p.values[0], "face", p.corner) }));
+      // Arrows meet where the face is widest: two thirds of the way out.
+      const [cx, cy] = center(p.face);
+      centres.set(p.slot, at([cx * 1.25, cy * 1.25]));
+    }
+    const moves: [Pt, Pt][] = arrows[l].filter(([a, b]) => centres.has(a) && centres.has(b)).map(([a, b]) => [centres.get(a)!, centres.get(b)!]);
+    body.push(...arrowsFor(moves).map((a) => arrowSvg(a, 0.02)));
+  });
+  if (set === "sq1-EP" || set === "sq1-parity") {
+    // The middle layer from the front: square when its two halves show the same colour.
+    const y = 0.56;
+    const flipped = state[24] === 1;
+    body.push(`<rect x='-0.6' y='${y}' width='1.2' height='0.14' fill='${BODY}'/>`);
+    body.push(`<rect x='-0.58' y='${y + 0.02}' width='0.55' height='0.1' fill='${CUBE_COLORS.F}'/>`);
+    body.push(`<rect x='0.03' y='${y + 0.02}' width='0.55' height='0.1' fill='${flipped ? CUBE_COLORS.B : CUBE_COLORS.F}'/>`);
+  }
+  return svg("-0.9 -0.9 1.8 1.8", body);
+}
+
 /** The SVG for a case, or null for the 3x3 (VisualCube draws those). */
 export function caseSvg(alg: Alg): string | null {
   if (alg.puzzle === "3x3") return null;
   if (alg.puzzle === "megaminx") return megaCase(alg);
+  if (alg.puzzle === "sq1") return sq1Case(alg);
   return cubeCase(alg);
 }

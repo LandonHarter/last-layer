@@ -27,7 +27,7 @@ import {
   type LearnData,
   type Task,
 } from "@/lib/learn";
-import { moveCount } from "@/lib/notation";
+import { countUnit, moveCount } from "@/lib/notation";
 import { allAlgs, entryFor, getProgress, mainAlg, recordAttempt, setMain, setStatus, useProgress, type Progress } from "@/lib/progress";
 import { makeSetup } from "@/lib/setup";
 import { logDrillAttempt } from "@/lib/solves";
@@ -540,7 +540,7 @@ function PickStep({ alg, progress }: { alg: Alg; progress: Progress }) {
                 {a === main && entry.main && <span className="font-semibold text-primary">Your algorithm</span>}
                 {a === alg.algs[0] && <span className="font-semibold text-foreground">Default</span>}
                 {entry.custom?.includes(a) && <span className="font-semibold text-foreground">Yours</span>}
-                {moveCount(a) === fewest && options.length > 1 && <span className="font-semibold text-foreground">Fewest moves</span>}
+                {moveCount(a) === fewest && options.length > 1 && <span className="font-semibold text-foreground">Fewest {countUnit(a, 2)}</span>}
                 {tags.map((t) => (
                   <span key={t}>{t}</span>
                 ))}

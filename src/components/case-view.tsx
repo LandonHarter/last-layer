@@ -13,7 +13,7 @@ import { StatusToggle } from "@/components/algs/status-toggle";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { fitAlg, isValidNotation } from "@/lib/cases";
-import { moveCount, type Notation } from "@/lib/notation";
+import { countUnit, moveCount, type Notation } from "@/lib/notation";
 import { addCustom, allAlgs, entryFor, mainAlg, removeCustom, setMain, useProgress } from "@/lib/progress";
 import { EXAMPLE_ALG, HOLD, notationOf, PUZZLE_NAMES, SET_INFO, setLabel } from "@/lib/puzzles";
 import { libraryReturnUrl } from "@/lib/library-return";
@@ -238,7 +238,9 @@ function AlgOption({
         <span className="flex shrink-0 flex-col items-end text-xs text-muted-foreground sm:flex-row sm:gap-3">
           {isCustom && <span className="font-semibold text-foreground">Yours</span>}
           {isDefault && !isCustom && <span>Default</span>}
-          <span className="tabular-nums">{count} moves</span>
+          <span className="tabular-nums">
+            {count} {countUnit(alg, count)}
+          </span>
         </span>
       </label>
       {isCustom && (
@@ -258,6 +260,7 @@ const NOTATION_HINT: Record<Alg["puzzle"], string> = {
   "6x6": "Use moves like R U2, Rw (two layers), 3Rw, 2R or 3R (one inner slice), x.",
   "7x7": "Use moves like R U2, Rw (two layers), 3Rw, 2R or 3R (one inner slice), M, x.",
   megaminx: "Use faces U, F, R, L, BR, BL (and DR, DL, D, B …); R2 is two fifths clockwise and R2' two fifths back.",
+  sq1: "Write turns of the top and bottom as (1,0) or 1,0, in twelfths, and the slice as /.",
 };
 
 function AddCustom({ alg, existing }: { alg: Alg; existing: string[] }) {
@@ -274,7 +277,7 @@ function AddCustom({ alg, existing }: { alg: Alg; existing: string[] }) {
     const fitted = fitAlg(alg, input);
     if (!fitted) {
       return setError(
-        `That doesn't solve ${alg.name}${alg.set === "F2L" ? " into the front-right slot" : ""}, or it turns the whole ${alg.puzzle === "megaminx" ? "puzzle" : "cube"}. Try it on the practice setup above.`,
+        `That doesn't solve ${alg.name}${alg.set === "F2L" ? " into the front-right slot" : ""}, ${alg.puzzle === "sq1" ? "or a slice turns while a corner blocks it" : `or it turns the whole ${alg.puzzle === "megaminx" ? "puzzle" : "cube"}`}. Try it on the practice setup above.`,
       );
     }
     if (existing.includes(fitted)) return setError("That one is already in the list.");
@@ -317,7 +320,8 @@ function AddCustom({ alg, existing }: { alg: Alg; existing: string[] }) {
         </p>
       ) : (
         <p id="custom-alg-hint" className="text-sm text-muted-foreground">
-          It&apos;s checked on a simulated {alg.puzzle === "megaminx" ? "megaminx" : "cube"} before it&apos;s added. A turn of the top at the start is fine.
+          It&apos;s checked on a simulated {alg.puzzle === "megaminx" ? "megaminx" : alg.puzzle === "sq1" ? "Square-1" : "cube"} before it&apos;s added.{" "}
+          {alg.puzzle === "sq1" ? "A turn of the layers at the start is fine." : "A turn of the top at the start is fine."}
         </p>
       )}
     </form>

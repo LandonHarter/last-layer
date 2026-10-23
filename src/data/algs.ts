@@ -1,5 +1,6 @@
 import { ALL_SETS, PUZZLE_NAMES, PUZZLES, SET_INFO, setsOf, type AlgSet, type Puzzle } from "@/lib/puzzles";
 import { PUZZLE_ALGS } from "./puzzle-algs";
+import { SQ1_ALGS } from "./sq1-algs";
 
 export type { AlgSet, Puzzle };
 
@@ -1221,7 +1222,7 @@ export const ALGS: Alg[] = [
     group,
     algs,
   })),
-  ...PUZZLE_ALGS.map((a) => ({ ...a, puzzle: SET_INFO[a.set].puzzle })),
+  ...[...PUZZLE_ALGS, ...SQ1_ALGS].map((a) => ({ ...a, puzzle: SET_INFO[a.set].puzzle })),
 ];
 
 export const ALGS_BY_ID = new Map(ALGS.map((a) => [a.id, a]));
@@ -1231,11 +1232,16 @@ export const SETS: AlgSet[] = PUZZLES.flatMap(setsOf);
 
 export const SET_TITLES = Object.fromEntries(ALL_SETS.map((s) => [s, SET_INFO[s].title])) as Record<AlgSet, string>;
 
-const F2L_GROUPS = ["White facing up", "White facing side", "Corner in slot", "Edge in slot", "Both in slot"];
+// Sets whose groups aren't in the order their cases are listed.
+const GROUP_ORDER: Partial<Record<AlgSet, string[]>> = {
+  F2L: ["White facing up", "White facing side", "Corner in slot", "Edge in slot", "Both in slot"],
+  "sq1-CP": ["One layer", "Both layers"],
+  "sq1-EP": ["One layer", "Both layers", "Both layers, a swap on each"],
+};
 
 /** Groups in each set, in the order the Library shows them. */
 export const GROUPS = Object.fromEntries(
-  ALL_SETS.map((s) => [s, s === "F2L" ? F2L_GROUPS : [...new Set(ALGS.filter((a) => a.set === s).map((a) => a.group))]]),
+  ALL_SETS.map((s) => [s, GROUP_ORDER[s] ?? [...new Set(ALGS.filter((a) => a.set === s).map((a) => a.group))]]),
 ) as Record<AlgSet, string[]>;
 
 export const algsOf = (puzzle: Puzzle) => ALGS.filter((a) => a.puzzle === puzzle);

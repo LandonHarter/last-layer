@@ -1,6 +1,7 @@
 import { ALGS, type Alg } from "@/data/algs";
 import { fitAlg } from "./cases";
-import { invertAlg, mirrorAlg, moveCount, splitMoves, tokens, type Notation } from "./notation";
+import { countUnit, invertAlg, mirrorAlg, moveCount, splitMoves, tokens, type Notation } from "./notation";
+import { looksSq1 } from "./sq1";
 import { notationOf } from "./puzzles";
 
 /** A piece of an algorithm to remember as one unit. Named when it is a well-known trigger. */
@@ -59,6 +60,7 @@ const MEGA_TRIGGERS = TRIGGERS.filter((t) => t.moves.every((m) => !m.includes("2
 
 /** Break an algorithm into chunks to learn one at a time: named triggers where they fit. */
 export function chunkAlg(alg: string, notation: Notation = "cube"): Chunk[] {
+  if (notation === "sq1" || looksSq1(alg)) return sq1Chunks(alg);
   const triggers = notation === "megaminx" ? MEGA_TRIGGERS : TRIGGERS;
   const moves = splitMoves(alg);
   const chunks: Chunk[] = [];
@@ -77,6 +79,28 @@ export function chunkAlg(alg: string, notation: Notation = "cube"): Chunk[] {
   }
   chunks.push(...splitRun(run));
   return mergeTiny(chunks);
+}
+
+/** Square-1: two slices to a chunk, each with the turn before it, so a chunk reads "(1,0) / (-1,0) /". */
+function sq1Chunks(alg: string): Chunk[] {
+  const units: string[][] = [];
+  let unit: string[] = [];
+  for (const move of splitMoves(alg)) {
+    unit.push(move);
+    if (move === "/") {
+      units.push(unit);
+      unit = [];
+    }
+  }
+  if (unit.length) {
+    if (units.length) units[units.length - 1].push(...unit);
+    else units.push(unit);
+  }
+  const chunks: Chunk[] = [];
+  for (let i = 0; i < units.length; i += 2) chunks.push({ moves: units.slice(i, i + 2).flat() });
+  // A lone last slice joins the chunk before it.
+  if (chunks.length > 1 && units.length % 2 === 1) chunks.splice(-2, 2, { moves: [...chunks.at(-2)!.moves, ...chunks.at(-1)!.moves] });
+  return chunks;
 }
 
 /** Fold one- and two-move pieces into an unnamed neighbour, so no chunk is a lone "F". */
@@ -100,6 +124,7 @@ function mergeTiny(chunks: Chunk[]): Chunk[] {
 
 /** Short facts about an algorithm, for comparing the options for a case. */
 export function describeAlg(alg: string): string[] {
+  if (looksSq1(alg)) return [`${moveCount(alg)} ${countUnit(alg, moveCount(alg))}`];
   const layers = tokens(alg).map((t) => t.replace(/(2'|2|')$/, ""));
   const bases = new Set(layers.map((b) => (/^[RLUDFB]w$/.test(b) ? b[0].toLowerCase() : b)));
   const tags: string[] = [`${moveCount(alg)} moves`];
@@ -171,7 +196,7 @@ export function memoryTips(target: Alg, alg: string, mainOf: (a: Alg) => string,
 
   if (chunks.length >= 4) {
     const half = Math.ceil(chunks.length / 2);
-    tips.push({ text: `${count} moves in ${chunks.length} chunks. Learn the first ${half} until they're smooth, then add the rest.` });
+    tips.push({ text: `${count} ${countUnit(alg, count)} in ${chunks.length} chunks. Learn the first ${half} until they're smooth, then add the rest.` });
   }
 
   const first = splitMoves(alg)[0];

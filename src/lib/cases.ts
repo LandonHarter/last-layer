@@ -11,6 +11,17 @@ import {
 import { invertAlg, parseAlg, simplifyAlg, type Notation } from "./notation";
 import { applyMoves, belowTopSolved, bestOrientation, facesUniform, isSolvedState, keepsOrientationN, solvedState, topReduced } from "./nxn";
 import { CUBE_SIZE, notationOf, puzzleOf, type AlgSet } from "./puzzles";
+import {
+  sq1Apply,
+  sq1CornersPermuted,
+  sq1CubeShape,
+  sq1Oriented,
+  sq1Solved,
+  sq1Solved1,
+  SQ1_ALL_TURNS,
+  SQ1_AUFS,
+  type Sq1State,
+} from "./sq1";
 
 export type { AlgSet };
 
@@ -33,6 +44,8 @@ type Engine = {
   keepsOrientation: (alg: string) => boolean;
   before: readonly string[];
   after: readonly string[];
+  /** The step ends with the puzzle solved (up to turns of the layers), even with no turns listed after. */
+  endsSolved?: boolean;
 };
 
 const cube3 = (done: (s: Sticker[]) => boolean, after: readonly string[]): Engine => ({
@@ -63,6 +76,20 @@ const mega = (done: (s: Uint8Array) => boolean, after: readonly string[]): Engin
   keepsOrientation: megaKeepsOrientation,
   before: MEGA_AUFS,
   after,
+});
+
+// Square-1: a slice that turns while blocked leaves the state broken, which no step counts as done.
+// Each check allows any turn of the layers at the end, so `after` stays empty.
+const sq1 = (done: (s: Sq1State) => boolean, before: readonly string[], endsSolved = false): Engine => ({
+  notation: "sq1",
+  start: (alg) => sq1Apply(sq1Solved(), alg),
+  apply: (s, alg) => sq1Apply(s as Sq1State, alg),
+  done: (s) => done(s as Sq1State),
+  // The Square-1 has no rotations in its notation, so every alg keeps the hold.
+  keepsOrientation: () => true,
+  before,
+  after: [""],
+  endsSolved,
 });
 
 // PBL turns both layers: any turn of the top with any turn of the bottom.
@@ -104,6 +131,23 @@ export function engineFor(c: Pick<CaseLike, "set" | "group">): Engine {
       break;
     case "mega-CP":
       engine = mega(megaIsSolved, MEGA_AUFS);
+      break;
+    case "sq1-CS":
+      // Out of shape, any turn of either layer is the same case.
+      engine = sq1(sq1CubeShape, SQ1_ALL_TURNS);
+      break;
+    case "sq1-CO":
+      engine = sq1((s) => sq1Oriented(s, false), SQ1_AUFS);
+      break;
+    case "sq1-EO":
+      engine = sq1((s) => sq1Oriented(s, true), SQ1_AUFS);
+      break;
+    case "sq1-CP":
+      engine = sq1(sq1CornersPermuted, SQ1_AUFS);
+      break;
+    case "sq1-EP":
+    case "sq1-parity":
+      engine = sq1(sq1Solved1, SQ1_AUFS, true);
       break;
     default:
       engine =

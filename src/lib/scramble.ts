@@ -1,13 +1,14 @@
 import { applyAlg, colorOf, solvedCube, stickerAt, type Face, type Sticker, type Vec } from "./cube";
 import { applyMoves, faceStickers, FACES as NXN_FACES, solvedState } from "./nxn";
+import { canSlice, sq1Apply, sq1Solved, wcaTurn } from "./sq1";
 
 const AXIS: Record<string, number> = { U: 0, D: 0, R: 1, L: 1, F: 2, B: 2 };
 const SUFFIXES = ["", "'", "2"];
 
 /** Puzzles the timer can scramble. */
-export type TimerPuzzle = "2x2" | "3x3" | "4x4" | "5x5" | "6x6" | "7x7" | "megaminx" | "pyraminx" | "skewb";
+export type TimerPuzzle = "2x2" | "3x3" | "4x4" | "5x5" | "6x6" | "7x7" | "megaminx" | "pyraminx" | "skewb" | "sq1";
 
-export const TIMER_PUZZLES: TimerPuzzle[] = ["3x3", "2x2", "4x4", "5x5", "6x6", "7x7", "megaminx", "pyraminx", "skewb"];
+export const TIMER_PUZZLES: TimerPuzzle[] = ["3x3", "2x2", "4x4", "5x5", "6x6", "7x7", "megaminx", "pyraminx", "skewb", "sq1"];
 
 export const TIMER_PUZZLE_NAMES: Record<TimerPuzzle, string> = {
   "2x2": "2x2",
@@ -19,6 +20,7 @@ export const TIMER_PUZZLE_NAMES: Record<TimerPuzzle, string> = {
   megaminx: "Megaminx",
   pyraminx: "Pyraminx",
   skewb: "Skewb",
+  sq1: "Square-1",
 };
 
 export const isTimerPuzzle = (v: unknown): v is TimerPuzzle => TIMER_PUZZLES.includes(v as TimerPuzzle);
@@ -92,10 +94,38 @@ function megaminxScramble(random: () => number): string {
   return lines.join(" ");
 }
 
+/**
+ * A random-move Square-1 scramble in WCA notation: before each slice, a turn
+ * of the two layers drawn from those that let the slice turn. Twenty slices
+ * mix the shape and pieces well.
+ */
+export function sq1Scramble(random: () => number = Math.random, slices = 20): string {
+  let state = sq1Solved();
+  const moves: string[] = [];
+  for (let i = 0; i < slices; i++) {
+    const options: string[] = [];
+    for (let a = -5; a <= 6; a++)
+      for (let b = -5; b <= 6; b++) {
+        // Turning nothing between two slices would undo the last one.
+        if (i > 0 && a === 0 && b === 0) continue;
+        if (canSlice(sq1Apply(state, `(${a},${b})`))) options.push(`(${a},${b})`);
+      }
+    const turn = pick(options, random);
+    state = sq1Apply(state, `${turn} /`);
+    moves.push(turn === "(0,0)" ? "/" : `${turn} /`);
+  }
+  // End with a turn of the layers, as WCA scrambles often do.
+  const a = wcaTurn(Math.floor(random() * 12));
+  const b = wcaTurn(Math.floor(random() * 12));
+  if (a || b) moves.push(`(${a},${b})`);
+  return moves.join(" ");
+}
+
 export function scrambleFor(puzzle: TimerPuzzle, random: () => number = Math.random): string {
   const n = CUBE_N[puzzle];
   if (n) return cubeScramble(n, random);
   if (puzzle === "megaminx") return megaminxScramble(random);
+  if (puzzle === "sq1") return sq1Scramble(random);
   if (puzzle === "skewb") return cornerScramble(["R", "U", "L", "B"], 11, random).join(" ");
   // Pyraminx: the big corners, then each tip turned (or not) on its own.
   const tips = ["u", "l", "r", "b"].flatMap((tip) => {
