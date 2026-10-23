@@ -32,6 +32,7 @@ export async function loadUserData(userId: string): Promise<LoadedData> {
           ...(s.inspectionMs !== null && { inspectionMs: s.inspectionMs }),
           ...(s.oll && { oll: s.oll }),
           ...(s.pll && { pll: s.pll }),
+          ...(s.daily !== null && { daily: s.daily }),
         }),
       ),
     };
@@ -44,7 +45,7 @@ export async function loadUserData(userId: string): Promise<LoadedData> {
   return { onboarded: user?.onboarded ?? false, data };
 }
 
-const solveRow = (userId: string, s: Solve) => ({ ...s, userId, at: BigInt(s.at), inspectionMs: s.inspectionMs ?? null, oll: s.oll ?? null, pll: s.pll ?? null });
+const solveRow = (userId: string, s: Solve) => ({ ...s, userId, at: BigInt(s.at), inspectionMs: s.inspectionMs ?? null, oll: s.oll ?? null, pll: s.pll ?? null, daily: s.daily ?? null });
 const drillRow = (userId: string, a: DrillAttempt) => ({ userId, caseId: a.id, ok: a.ok, ms: a.ms, revealed: a.revealed, hinted: a.hinted ?? null, timed: a.timed ?? false, at: BigInt(a.at) });
 
 function docEntries(docs: Record<string, unknown>): [string, Prisma.InputJsonValue][] {

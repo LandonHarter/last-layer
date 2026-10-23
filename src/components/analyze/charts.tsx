@@ -398,6 +398,151 @@ export function TrendChart({
 }
 
 // ---------------------------------------------------------------------------
+// Calendar
+
+export type CalendarDay = {
+  /** Local midnight of the day. */
+  at: number;
+  /** ms; null for nothing that day or not finished, Infinity for a DNF. */
+  value: number | null;
+  /** Started but not finished. */
+  partial?: boolean;
+  title: string;
+  detail?: string;
+};
+
+const CELL = 13;
+const CELL_GAP = 3;
+const DAY_LABEL_W = 30;
+const MONTH_LABEL_H = 18;
+const LEVEL_OPACITY = [0.22, 0.45, 0.7, 1];
+const monthShort = new Intl.DateTimeFormat(undefined, { month: "short" });
+
+/**
+ * One square per day, Monday at the top, the latest week on the right. Faster
+ * days are darker (quartiles of the days shown).
+ */
+export function CalendarHeatmap({ days, end, valueFormat, label }: { days: CalendarDay[]; end: number; valueFormat: (v: number) => string; label: string }) {
+  const [ref, width] = useWidth<HTMLDivElement>();
+  const step = CELL + CELL_GAP;
+  // As many weeks as fit, but no more than reach back to the first day (and at least 8).
+  const firstAt = days.length ? Math.min(...days.map((d) => d.at)) : end;
+  const span = Math.ceil((end - firstAt) / (7 * 86400000)) + 2;
+  const weeks = Math.max(8, Math.min(53, span, Math.floor((width - DAY_LABEL_W + CELL_GAP) / step)));
+
+  const grid = useMemo(() => {
+    const byDay = new Map(days.map((d) => [new Date(d.at).toDateString(), d]));
+    const last = new Date(end);
+    last.setHours(0, 0, 0, 0);
+    // Back to the Monday of the latest week, then back the rest of the weeks.
+    const first = new Date(last);
+    first.setDate(first.getDate() - ((first.getDay() + 6) % 7) - (weeks - 1) * 7);
+    const cells: { col: number; row: number; date: Date; day?: CalendarDay }[] = [];
+    for (let i = 0; ; i++) {
+      const date = new Date(first.getFullYear(), first.getMonth(), first.getDate() + i);
+      if (date > last) break;
+      cells.push({ col: Math.floor(i / 7), row: i % 7, date, day: byDay.get(date.toDateString()) });
+    }
+    return cells;
+  }, [days, end, weeks]);
+
+  // Quartile cut points over the finished days in view; lower is faster, so darker.
+  const cuts = useMemo(() => {
+    const vals = grid.flatMap((c) => (c.day?.value != null && Number.isFinite(c.day.value) ? [c.day.value] : [])).sort((a, b) => a - b);
+    return vals.length ? [0.25, 0.5, 0.75].map((q) => vals[Math.min(vals.length - 1, Math.floor(q * vals.length))]) : [];
+  }, [grid]);
+  const level = (v: number) => 3 - cuts.filter((c) => v > c).length;
+
+  const filled = grid.filter((c) => c.day);
+  const { index, setIndex, onKeyDown } = useKeyboardIndex(filled.length);
+  const current = index === null ? null : filled[index];
+  const height = MONTH_LABEL_H + 7 * step;
+  const cx = (col: number) => DAY_LABEL_W + col * step;
+  const cy = (row: number) => MONTH_LABEL_H + row * step;
+
+  return (
+    <div className="flex flex-col gap-3">
+      <Frame
+        frameRef={ref}
+        width={width}
+        height={height}
+        label={label}
+        tooltip={
+          current?.day
+            ? {
+                x: cx(current.col) + CELL,
+                y: cy(current.row),
+                content: (
+                  <div className="flex flex-col gap-0.5">
+                    <div className="mb-1 text-xs text-muted-foreground">{current.day.title}</div>
+                    <TipRow value={current.day.value === null ? "–" : valueFormat(current.day.value)} label={current.day.detail ?? ""} />
+                  </div>
+                ),
+              }
+            : null
+        }
+      >
+        <g tabIndex={0} onKeyDown={onKeyDown} onBlur={() => setIndex(null)} className="group/chart outline-none" aria-label={`${label}. Use the arrow keys to read days.`}>
+          <rect x={DAY_LABEL_W - 4} y={MONTH_LABEL_H - 4} width={weeks * step + 4} height={7 * step + 4} rx={6} fill="none" strokeWidth={2} className="stroke-transparent group-focus-visible/chart:stroke-ring" />
+          {["Mon", "Wed", "Fri"].map((d, i) => (
+            <text key={d} x={0} y={cy(i * 2) + CELL / 2} dy="0.32em" className="fill-muted-foreground">
+              {d}
+            </text>
+          ))}
+          {grid
+            .filter((c) => c.date.getDate() <= 7 && c.row === 0)
+            .map((c) => (
+              <text key={c.col} x={cx(c.col)} y={MONTH_LABEL_H - 6} className="fill-muted-foreground">
+                {monthShort.format(c.date)}
+              </text>
+            ))}
+          {grid.map((c) => {
+            const v = c.day?.value;
+            const done = v != null && Number.isFinite(v);
+            const isCurrent = current === c;
+            return (
+              <rect
+                key={c.date.toDateString()}
+                x={cx(c.col)}
+                y={cy(c.row)}
+                width={CELL}
+                height={CELL}
+                rx={3}
+                className={cn(
+                  done ? "fill-chart-1" : c.day?.partial ? "fill-card stroke-chart-1" : v === Infinity ? "fill-muted stroke-missed" : "fill-muted",
+                  isCurrent && "stroke-foreground",
+                )}
+                fillOpacity={done ? LEVEL_OPACITY[level(v)] : 1}
+                strokeWidth={isCurrent ? 2 : c.day?.partial || v === Infinity ? 1.5 : 0}
+                onPointerEnter={() => c.day && setIndex(filled.indexOf(c))}
+                onPointerLeave={() => setIndex(null)}
+              />
+            );
+          })}
+        </g>
+      </Frame>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+        <span className="flex items-center gap-1.5">
+          Slower
+          {LEVEL_OPACITY.map((o) => (
+            <svg key={o} width={CELL} height={CELL} aria-hidden>
+              <rect width={CELL} height={CELL} rx={3} className="fill-chart-1" fillOpacity={o} />
+            </svg>
+          ))}
+          Faster
+        </span>
+        <span className="flex items-center gap-1.5">
+          <svg width={CELL} height={CELL} aria-hidden>
+            <rect x={0.75} y={0.75} width={CELL - 1.5} height={CELL - 1.5} rx={3} className="fill-card stroke-chart-1" strokeWidth={1.5} />
+          </svg>
+          Not finished
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Distribution
 
 export type Fit = "normal" | "lognormal" | "none";

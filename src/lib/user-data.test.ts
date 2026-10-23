@@ -54,7 +54,9 @@ describe("checking input", () => {
   });
 
   test("solves and drill answers", () => {
-    expect(cleanSolve({ ...solve("a"), penalty: "bogus", oll: "" })).toEqual({ ...solve("a"), inspectionMs: undefined, oll: undefined, pll: undefined });
+    expect(cleanSolve({ ...solve("a"), penalty: "bogus", oll: "" })).toEqual({ ...solve("a"), inspectionMs: undefined, oll: undefined, pll: undefined, daily: undefined });
+    expect(cleanSolve({ ...solve("a"), daily: 12 })?.daily).toBe(12);
+    expect(cleanSolve({ ...solve("a"), daily: 7 })?.daily).toBeUndefined();
     expect(cleanSolve({ id: "a", ms: -1, at: 1, session: "main" })).toBeNull();
     expect(cleanDrillAttempt({ id: "pll-t", ok: "yes", ms: 1, at: 1 })).toBeNull();
     expect(cleanDrillAttempt(attempt("pll-t", 5))?.id).toBe("pll-t");

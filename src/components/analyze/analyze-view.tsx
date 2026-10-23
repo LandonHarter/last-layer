@@ -6,6 +6,7 @@ import { DownloadIcon, UploadIcon } from "lucide-react";
 import { toast } from "sonner";
 import { ALGS, ALGS_BY_ID, caseLabel, fullSetLabel, SETS } from "@/data/algs";
 import { GroupBarChart, HistogramChart, Legend, QQChart, TrendChart, type Fit, type GroupBar, type TrendLine } from "@/components/analyze/charts";
+import { DailySection } from "@/components/analyze/daily";
 import { ChancesTest, CompareTest, NormalityTest, Panel, TrendTest, type Sample } from "@/components/analyze/tests";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -212,6 +213,8 @@ function TimerAnalysis() {
   if (!data.solves.length) return <Empty text="No solves yet. Time a few and they'll show up here." href="/timer" action="Open the Timer" />;
 
   const excluded = samples.filter((s) => s.excluded).length;
+  // Dailies are per puzzle, so with All sessions picked show the Timer's current one.
+  const dailySession = session === "all" ? data.current : session;
   const sessionItems = [{ value: "all", label: "All sessions" }, ...data.sessions.map((s) => ({ value: s.id, label: s.name }))];
 
   return (
@@ -227,6 +230,9 @@ function TimerAnalysis() {
         <FilterSelect label="Range" value={range} items={RANGES} onChange={setRange} />
         <FilterSelect label="Outliers" value={outliers} items={OUTLIERS} onChange={setOutliers} className="min-w-52" />
       </FilterBar>
+      {data.solves.some((s) => s.daily) && (
+        <DailySection solves={data.solves} session={dailySession} sessionName={sessionName.get(dailySession) ?? "this session"} />
+      )}
       {samples.length === 0 ? (
         <p className="text-base text-muted-foreground">Nothing in this range. Try All time or another session.</p>
       ) : (

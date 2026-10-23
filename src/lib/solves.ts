@@ -21,6 +21,8 @@ export type Solve = {
   oll?: string;
   /** PLL case you solved it with, like `pll-t`. Optional. */
   pll?: string;
+  /** Counted toward that day's daily average of this many solves (see `daily.ts`). */
+  daily?: number;
 };
 
 /** The last-layer steps a solve can be tagged with. */
@@ -77,6 +79,12 @@ export function setPenalty(id: string, penalty: Penalty) {
 /** Tag a solve with the OLL or PLL case it had, or clear it with undefined. */
 export function setSolveCase(id: string, step: SolveStep, caseId: string | undefined) {
   timerStore.update((d) => ({ ...d, solves: d.solves.map((s) => (s.id === id ? { ...s, [step]: caseId } : s)) }));
+}
+
+/** Tag solves as part of a daily average, or untag them with undefined. */
+export function setSolvesDaily(ids: string[], size: number | undefined) {
+  const set = new Set(ids);
+  timerStore.update((d) => ({ ...d, solves: d.solves.map((s) => (set.has(s.id) ? { ...s, daily: size } : s)) }));
 }
 
 export function deleteSolve(id: string) {

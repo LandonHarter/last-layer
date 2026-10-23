@@ -60,8 +60,9 @@ Sticker palettes for the picker previews live in `src/lib/themes.ts`, because th
   - Keyboard: Space reveals, H shows the hint, J/← is Missed, K/→ is Got it, N gives a new setup, Esc ends the session.
 - **Timer (`/timer`):**
   - Main column: the scramble in mono at the top (smaller and scrolling for 5x5 and up and megaminx) with the session select (dropping down from it, each session with its puzzle), a manage button, New scramble, Add time and Settings; the clock in the middle; ao5 and ao12 under it; penalty (OK / +2 / DNF) and Delete for the last solve, then optional OLL and PLL ghost buttons that tag it with the case you had (a popover with search and one row per case: image, name, your main algorithm in muted mono). The unfolded scramble (white top, green front, in the theme's sticker colors; cubes only) sits bottom-left, in the empty left column on desktop.
-  - Centring: on desktop the main column sits between two equal side columns (18rem, 22rem from `xl`), and the clock is positioned on its own, centred on the screen (its layer reaches up under the header), with everything else hanging below it. So when all but the clock fades out, it is dead centre.
+  - Centring: on desktop the page spans the full width, so the sidebar sits on the right edge; the main column sits between two equal side columns (18rem, 22rem from `xl`), and the clock is positioned on its own, centred on the screen (its layer reaches up under the header), with everything else hanging below it. So when all but the clock fades out, it is dead centre.
   - Sessions (manage button): rename the current one and change its puzzle, start a new one with a puzzle, and a list of all sessions with their puzzle and solve count, a click to switch and a two-click delete with Undo. Deleting the last one leaves an empty Main. OLL/PLL tags only show on 3x3 sessions.
+  - Daily (top of the sidebar): one average a day per session. Pick ao5, ao12, ao25 or ao50 and press Start daily; the next solve starts it and the next N are tagged (`daily` on the solve). While running it shows the count, a progress bar and the average so far, with Discard (Undo in the toast); once done, the average in `font-clock` with Best daily yet (`learned`) or the change from the last daily (`learned` faster, `missed` slower). The streak sits by the heading; today not being done yet doesn't break it.
   - Sidebar (right on desktop, below on mobile): current and best single, mo3, ao5, ao12, ao50, ao100 and mean, then the solve list (latest 200). A row opens its scramble, date, OLL/PLL tags and penalty controls.
   - Clock colors: holding is `missed`, ready is `learned` (stackmat red/green). Inspection turns `learning` after 8 s and `missed` after 15 s.
   - Controls: hold Space for the hold time (0.3 s by default), let go to start; any key or a tap stops. Esc cancels a hold or inspection. On touch, the middle of the page is the pad. Everything but the clock fades out while timing.
@@ -71,6 +72,7 @@ Sticker palettes for the picker previews live in `src/lib/themes.ts`, because th
 - **Analyze (`/analyze`):**
   - Title with a Timer solves / Algorithm drills toggle (the same state as the header switch). A sticky filter row scopes everything below: session (plus OLL and PLL case, once you've tagged solves) or set and case, range, and an outlier rule. Outliers are drawn hollow and left out of lines, fits and tests; DNFs never count as outliers.
   - Summary: one hero figure (mean time, or the share you got for drills) with its 95% interval, then a grid of figures.
+  - Daily (timer only, once any daily exists; for the picked session, or the Timer's current one with All sessions): figures (latest, best daily, streak, change from the last daily, trend per week, where the trend is in 30 days), the dailies by date with a mean of the last 7 and a trend line, a sentence on the trend, and a calendar heatmap (one square per day, Monday at the top, faster quartiles darker in `--chart-1`, unfinished days outlined).
   - Over time: dots plus rolling averages (toggle each in the legend) and a trend line; by solve or by date, linear or log. Drills add a rolling Got it chart.
   - Distribution: histogram with a normal or log-normal curve, and a Q-Q plot.
   - Tests: Shapiro-Wilk normality, trend regression, Welch comparison of two groups, and chances of beating a time (bootstrapped for ao5 and ao12). Each ends in a plain sentence.
@@ -100,8 +102,8 @@ shadcn (base-nova style, Base UI primitives) in `src/components/ui`. App pieces:
 - `library-view.tsx`, `learn-view.tsx`, `drill-view.tsx`: page bodies
 - `backup-menu.tsx`: header backup popover
 - `tools/`: `ToolPage` frame, `TOOLS` list and one view per tool
-- `timer/`: `TimerView`, `ScrambleNet` (any cube size; also exports `useStickers`), `SessionStats`, `SolveList`, `SessionPicker`, `PenaltyToggle`, `CasePicker`
-- `analyze/`: `AnalyzeView`, charts (`TrendChart`, `HistogramChart`, `QQChart`, `GroupBarChart`) and test panels
+- `timer/`: `TimerView`, `ScrambleNet` (any cube size; also exports `useStickers`), `SessionStats`, `DailyCard`, `SolveList`, `SessionPicker`, `PenaltyToggle`, `CasePicker`
+- `analyze/`: `AnalyzeView`, charts (`TrendChart`, `HistogramChart`, `QQChart`, `GroupBarChart`, `CalendarHeatmap`), `DailySection` and test panels
 
 Case images are SVGs in `public/cases/{id}.svg`, yellow top, green front, red right. 3x3 ones come from VisualCube: OLL and PLL use the top-down plan view, and PLL images have arrows. F2L uses the isometric view so the front-right slot shows. Every other puzzle's images are drawn in the same style by `scripts/case-svg.ts` from the simulators: plan views with grey for stickers that don't matter to the step and arrows when the case ends solved; 2x2 PBL shows the top and, beside it, the bottom as seen through the cube; cases that only touch the middle layer show the front face; the megaminx is its top pentagon with the side stickers around it.
 

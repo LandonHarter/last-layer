@@ -11,11 +11,13 @@ import { CasePicker } from "@/components/timer/case-picker";
 import { PenaltyToggle } from "@/components/timer/penalty-toggle";
 import { AddTimeButton, TypedClock, type TypedTime } from "@/components/timer/add-time";
 import { SessionStats } from "@/components/timer/session-stats";
+import { DailyCard } from "@/components/timer/daily-card";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { dailyRuns, todayRun } from "@/lib/daily";
 import { cubeSize, scrambleFor, type TimerPuzzle } from "@/lib/scramble";
 import type { StackmatPacket } from "@/lib/stackmat";
 import { useAudioInputs, useStackmat, type StackmatConnection } from "@/lib/use-stackmat";
@@ -25,6 +27,7 @@ import {
   effectiveMs,
   formatMs,
   formatSolve,
+  getTimerData,
   restoreSolve,
   sessionPuzzle,
   updateTimerSettings,
@@ -61,6 +64,12 @@ export function TimerView() {
   const solves = useMemo(() => data.solves.filter((s) => s.session === data.current), [data]);
   const puzzle = sessionPuzzle(data.sessions.find((s) => s.id === data.current));
   const times = useMemo(() => solves.map(effectiveMs), [solves]);
+  const runs = useMemo(() => dailyRuns(data.solves, data.current), [data]);
+  // "Start daily" waits for the next solve; it belongs to the session it was pressed in.
+  const [armed, setArmed] = useState<{ session: string; size: number } | null>(null);
+  const armedSize = armed?.session === data.current ? armed.size : null;
+  const armedRef = useRef(armedSize);
+  armedRef.current = armedSize;
 
   const [phase, setPhaseState] = useState<Phase>("idle");
   const [now, setNow] = useState(0);
@@ -92,6 +101,16 @@ export function TimerView() {
   const setInspectStart = useCallback((t: number | null) => {
     inspectStartRef.current = t;
     setInspectStartState(t);
+  }, []);
+
+  /** The daily size to tag the solve being saved with: today's run until it's full, or a freshly started one. */
+  const dailyTag = useCallback((): number | undefined => {
+    const d = getTimerData();
+    const run = todayRun(dailyRuns(d.solves, d.current));
+    if (run) return run.done ? undefined : run.size;
+    if (armedRef.current === null) return undefined;
+    setArmed(null);
+    return armedRef.current;
   }, []);
 
   // Scrambles are random, so make the first one on the client to keep hydration stable.
@@ -150,20 +169,21 @@ export function TimerView() {
       scramble: scrambleRef.current,
       at: Date.now(),
       inspectionMs,
+      daily: dailyTag(),
     });
     setLastId(solve.id);
     newScramble(puzzleRef.current);
-  }, [setPhase, setInspectStart, newScramble]);
+  }, [setPhase, setInspectStart, newScramble, dailyTag]);
 
   /** Save a time typed in by hand, against the scramble on screen. */
   const addTyped = useCallback(
     (t: TypedTime) => {
-      const solve = addSolve({ ...t, scramble: scrambleRef.current, at: Date.now() });
+      const solve = addSolve({ ...t, scramble: scrambleRef.current, at: Date.now(), daily: dailyTag() });
       setLastId(solve.id);
       newScramble(puzzleRef.current);
       toast(`Added ${formatSolve(solve)}`, { action: { label: "Undo", onClick: () => deleteSolve(solve.id) } });
     },
-    [newScramble],
+    [newScramble, dailyTag],
   );
 
   // Press: start holding (or inspection). Release: start the clock if it's ready.
@@ -333,7 +353,7 @@ export function TimerView() {
 
   return (
     // On desktop the timer column sits between two equal side columns, so the clock is centred on the screen.
-    <div className="mx-auto grid w-full max-w-7xl flex-1 lg:grid-cols-[18rem_minmax(0,1fr)_18rem] xl:grid-cols-[22rem_minmax(0,1fr)_22rem]">
+    <div className="grid w-full flex-1 lg:grid-cols-[18rem_minmax(0,1fr)_18rem] xl:grid-cols-[22rem_minmax(0,1fr)_22rem]">
       <section aria-label="Timer" className="relative flex min-h-[calc(100svh-var(--header-h)-var(--tabbar-h))] flex-col px-4 py-6 sm:px-6 lg:col-start-2 lg:px-2">
         {/* The whole timer area is the touch target, so phones can hold anywhere. It reaches up under the
             header so the clock in it is centred on the screen once the header fades out. */}
@@ -441,6 +461,7 @@ export function TimerView() {
         aria-label="Session"
         className={cn("flex flex-col gap-5 border-t border-border px-4 py-6 sm:px-6 lg:col-start-3 lg:max-h-[calc(100svh-var(--header-h))] lg:border-t-0 lg:border-l", hideWhileTiming)}
       >
+        <DailyCard runs={runs} armed={armedSize} onArm={(size) => setArmed(size === null ? null : { session: data.current, size })} />
         <SessionStats times={times} />
         <SolveList solves={solves} times={times} onDelete={removeSolve} />
       </aside>

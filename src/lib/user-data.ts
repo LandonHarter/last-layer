@@ -5,6 +5,7 @@
  * the drill log grow without bound, so only what changed is sent for them.
  */
 
+import { DAILY_SIZES } from "./daily";
 import type { DrillAttempt, Penalty, Solve } from "./solves";
 
 export const TIMER_KEY = "last-layer:timer:v1";
@@ -88,6 +89,7 @@ export function cleanSolve(v: unknown): Solve | null {
     inspectionMs: time(s.inspectionMs) ? ms(s.inspectionMs) : undefined,
     oll: optStr(s.oll, 50),
     pll: optStr(s.pll, 50),
+    daily: DAILY_SIZES.includes(s.daily as number) ? s.daily : undefined,
   };
 }
 

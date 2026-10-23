@@ -107,6 +107,8 @@ model Solve {
   inspectionMs Int?
   oll          String?
   pll          String?
+  /// Size of the daily average it counted toward (5, 12, 25 or 50).
+  daily        Int?
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([userId, id])
