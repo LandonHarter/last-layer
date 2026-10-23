@@ -1,9 +1,9 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque, JetBrains_Mono } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import { Analytics } from "@vercel/analytics/next";
 import { AccountProvider, type Account } from "@/components/account-provider";
-import { SiteHeader } from "@/components/site-header";
+import { SiteHeader, TabBar } from "@/components/site-header";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { getSession } from "@/lib/auth";
@@ -31,6 +31,9 @@ export const metadata: Metadata = {
   appleWebApp: { title: "Last Layer" },
 };
 
+// Cover lets the tab bar sit over the home indicator area and pad itself with the safe-area inset.
+export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover" };
+
 async function loadAccount(): Promise<Account | null> {
   const session = await getSession();
   if (!session) return null;
@@ -49,7 +52,8 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           <AccountProvider account={account}>
             <TooltipProvider>
               <SiteHeader />
-              <main className="flex flex-1 flex-col">{children}</main>
+              <main className="flex flex-1 flex-col pb-(--tabbar-h)">{children}</main>
+              <TabBar />
               <Toaster position="top-center" />
             </TooltipProvider>
           </AccountProvider>

@@ -334,12 +334,12 @@ export function TimerView() {
   return (
     // On desktop the timer column sits between two equal side columns, so the clock is centred on the screen.
     <div className="mx-auto grid w-full max-w-7xl flex-1 lg:grid-cols-[18rem_minmax(0,1fr)_18rem] xl:grid-cols-[22rem_minmax(0,1fr)_22rem]">
-      <section aria-label="Timer" className="relative flex min-h-[calc(100svh-3.5rem-1px)] flex-col px-4 py-6 sm:px-6 lg:col-start-2 lg:px-2">
+      <section aria-label="Timer" className="relative flex min-h-[calc(100svh-var(--header-h)-var(--tabbar-h))] flex-col px-4 py-6 sm:px-6 lg:col-start-2 lg:px-2">
         {/* The whole timer area is the touch target, so phones can hold anywhere. It reaches up under the
             header so the clock in it is centred on the screen once the header fades out. */}
         <div
           aria-hidden="true"
-          className="absolute inset-x-0 -top-[calc(3.5rem+1px)] bottom-0 touch-none select-none"
+          className="absolute inset-x-0 -top-(--header-h) bottom-0 touch-none select-none"
           onPointerDown={(e) => {
             if (e.button !== 0) return;
             e.currentTarget.setPointerCapture(e.pointerId);
@@ -368,7 +368,7 @@ export function TimerView() {
         </div>
 
         {/* The clock alone decides the centre; everything else hangs below it. */}
-        <div className="pointer-events-none absolute inset-x-0 -top-[calc(3.5rem+1px)] bottom-0 flex items-center justify-center">
+        <div className="pointer-events-none absolute inset-x-0 -top-(--header-h) bottom-0 flex items-center justify-center">
           <div className="relative">
             {typing ? (
               <div className="pointer-events-auto" onPointerDown={(e) => e.stopPropagation()}>
@@ -439,7 +439,7 @@ export function TimerView() {
 
       <aside
         aria-label="Session"
-        className={cn("flex flex-col gap-5 border-t border-border px-4 py-6 sm:px-6 lg:col-start-3 lg:max-h-[calc(100svh-3.5rem-1px)] lg:border-t-0 lg:border-l", hideWhileTiming)}
+        className={cn("flex flex-col gap-5 border-t border-border px-4 py-6 sm:px-6 lg:col-start-3 lg:max-h-[calc(100svh-var(--header-h))] lg:border-t-0 lg:border-l", hideWhileTiming)}
       >
         <SessionStats times={times} />
         <SolveList solves={solves} times={times} onDelete={removeSolve} />

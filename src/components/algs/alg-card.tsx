@@ -10,12 +10,13 @@ import { StatusToggle } from "./status-toggle";
 export function AlgCard({ alg, entry }: { alg: Alg; entry: Entry }) {
   const count = alg.algs.length + (entry.custom?.length ?? 0);
   return (
-    <article className="flex gap-3 rounded-xl border border-border bg-card p-3 text-card-foreground sm:flex-col">
+    // Phones: image and details side by side, the status toggle full width under them.
+    <article className="flex flex-wrap gap-3 rounded-xl border border-border bg-card p-3 text-card-foreground sm:flex-col sm:flex-nowrap">
       <Link
         href={`/algs/${alg.id}`}
         tabIndex={-1}
         aria-hidden
-        className="w-24 shrink-0 rounded-lg bg-muted/70 p-2 transition-colors hover:bg-muted sm:w-full sm:px-4 sm:py-3"
+        className="w-20 shrink-0 rounded-lg bg-muted/70 p-2 transition-colors hover:bg-muted sm:w-full sm:px-4 sm:py-3"
       >
         <CaseImage alg={alg} className="mx-auto w-full max-w-32" />
       </Link>
@@ -38,8 +39,8 @@ export function AlgCard({ alg, entry }: { alg: Alg; entry: Entry }) {
             {count - 1} more {count - 1 === 1 ? "algorithm" : "algorithms"}
           </Link>
         )}
-        <StatusToggle id={alg.id} status={entry.status} className="mt-auto" />
       </div>
+      <StatusToggle id={alg.id} status={entry.status} className="sm:mt-auto" />
     </article>
   );
 }

@@ -6,9 +6,9 @@ export const metadata: Metadata = { title: "Tools | Last Layer" };
 
 export default function ToolsPage() {
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-8 sm:px-6 md:py-12">
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-6 sm:px-6 md:py-12">
       <div>
-        <h1 className="text-4xl font-extrabold leading-[1.05] tracking-tight sm:text-5xl">Tools</h1>
+        <h1 className="text-[2rem] font-extrabold leading-[1.05] tracking-tight sm:text-5xl">Tools</h1>
         <p className="mt-3 max-w-prose text-base leading-relaxed text-muted-foreground">Helpers for blindfolded, fewest moves and everything around a solve.</p>
       </div>
       <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

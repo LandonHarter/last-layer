@@ -37,8 +37,8 @@ export function CaseView({ id }: { id: string }) {
   const libraryUrl = alg.puzzle === "3x3" ? "/" : `/?puzzle=${alg.puzzle}`;
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-4 py-6 sm:px-6 md:py-10">
-      <nav className="flex flex-wrap items-center justify-between gap-3 text-sm" aria-label="Cases">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-4 sm:gap-10 sm:px-6 md:py-10">
+      <nav className="flex items-center justify-between gap-3 text-sm" aria-label="Cases">
         <div className="flex items-center gap-2">
           <Link
             href={libraryUrl}
@@ -52,9 +52,11 @@ export function CaseView({ id }: { id: string }) {
             }}
           >
             <ArrowLeftIcon data-icon="inline-start" />
-            Back to library
+            <span className="sm:hidden">Library</span>
+            <span className="hidden sm:inline">Back to library</span>
           </Link>
-          <p className="text-muted-foreground">
+          {/* Phones have the group under the name already. */}
+          <p className="hidden text-muted-foreground sm:block">
             {alg.puzzle !== "3x3" && (
               <>
                 {PUZZLE_NAMES[alg.puzzle]} <span aria-hidden>/</span>{" "}
@@ -69,8 +71,8 @@ export function CaseView({ id }: { id: string }) {
         </div>
       </nav>
 
-      <div className="grid items-start gap-8 md:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] md:gap-12">
-        <div className="mx-auto w-full max-w-72 rounded-2xl bg-muted p-6 sm:max-w-sm md:sticky md:top-20 md:max-w-none md:p-10">
+      <div className="grid items-start gap-6 sm:gap-8 md:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] md:gap-12">
+        <div className="mx-auto w-full max-w-56 rounded-2xl bg-muted p-5 sm:max-w-sm sm:p-6 md:sticky md:top-20 md:max-w-none md:p-10">
           <CaseImage alg={alg} className="w-full" />
         </div>
 

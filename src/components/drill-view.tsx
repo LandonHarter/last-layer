@@ -21,6 +21,7 @@ import { setPuzzle, usePuzzle } from "@/lib/puzzle-choice";
 import { HOLD, PUZZLE_NAMES, setLabel, setsOf, type Puzzle } from "@/lib/puzzles";
 import { createStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
+import { PageIntro } from "@/components/page-intro";
 
 type StatusFilter = "learning" | "learned" | "both";
 /** Sets you've picked, across every puzzle, so each puzzle remembers its own. `timed` hides the case and times you. */
@@ -81,15 +82,15 @@ export function DrillView() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-12 sm:px-6 md:py-20">
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-6 sm:px-6 md:py-20">
       <div>
-        <h1 className="text-4xl font-extrabold leading-[1.05] tracking-tight sm:text-5xl">Drill your algorithms</h1>
-        <p className="mt-4 max-w-prose text-base leading-relaxed text-muted-foreground">
+        <h1 className="text-[2rem] font-extrabold leading-[1.05] tracking-tight sm:text-5xl">Drill your algorithms</h1>
+        <PageIntro>
           You&apos;ll see a case and moves that set it up. Do the setup on your cube, solve it with your algorithm, then
           mark how it went. Setups change every time and never just undo your algorithm. Pick which sets to mix and whether to
           include cases you&apos;ve learned. With both, In progress cases come up about six times as often as learned ones,
           and a miss brings a case back sooner.
-        </p>
+        </PageIntro>
       </div>
 
       <div className="flex flex-col gap-5 rounded-xl border border-border bg-card p-5 sm:p-6">

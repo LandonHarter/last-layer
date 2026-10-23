@@ -15,6 +15,7 @@ import { entryFor, STATUS_LABELS, useProgress, type Progress, type Status } from
 import { setPuzzle, usePuzzle } from "@/lib/puzzle-choice";
 import { HEADLINES, PUZZLE_NAMES, PUZZLES, setLabel, setsOf, type Puzzle } from "@/lib/puzzles";
 import { cn } from "@/lib/utils";
+import { PageIntro } from "@/components/page-intro";
 
 type SetFilter = "all" | AlgSet;
 type StatusFilter = "all" | Status;
@@ -169,22 +170,22 @@ export function LibraryView({ initial = DEFAULT_FILTERS, syncUrl = false }: { in
 
   return (
     <>
-      <section className="mx-auto grid w-full max-w-7xl px-4 sm:px-6 gap-8 py-10 md:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] md:items-end md:py-14">
+      <section className="mx-auto grid w-full max-w-7xl px-4 sm:px-6 gap-6 py-6 md:gap-8 md:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] md:items-end md:py-14">
         <div className="max-w-xl">
-          <h1 className="text-4xl font-extrabold leading-[1.05] tracking-tight text-balance sm:text-5xl">{HEADLINES[puzzle]}</h1>
-          <p className="mt-4 max-w-prose text-base leading-relaxed text-muted-foreground">
+          <h1 className="text-[2rem] font-extrabold leading-[1.05] tracking-tight text-balance sm:text-5xl">{HEADLINES[puzzle]}</h1>
+          <PageIntro>
             Mark a case <strong className="font-semibold text-foreground">In progress</strong> when you start learning it.
             In progress and Learned cases show up in Drill, with the ones you&apos;re still learning coming back most.
             Open a case to see every algorithm for it and pick the one you use.
-          </p>
+          </PageIntro>
         </div>
         <ProgressBoard progress={progress} puzzle={puzzle} />
       </section>
 
-      <div className="sticky top-14 z-30 mb-6 border-y border-border bg-background/90 py-3 backdrop-blur">
+      <div className="sticky top-(--header-h) z-30 mb-6 border-y border-border bg-background/90 py-3 backdrop-blur">
         <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center gap-2 px-4 sm:px-6">
           <PuzzleSelect value={puzzle} onChange={choosePuzzle} />
-          <div className="relative min-w-52 flex-1">
+          <div className="relative min-w-0 flex-1 sm:min-w-52">
             <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={query}
@@ -194,55 +195,58 @@ export function LibraryView({ initial = DEFAULT_FILTERS, syncUrl = false }: { in
               className="h-9 pl-8"
             />
           </div>
-          <ToggleGroup
-            value={[set]}
-            onValueChange={(v) => {
-              if (!v[0]) return;
-              setSet(v[0] as SetFilter);
-              setGroup("all");
-            }}
-            variant="outline"
-            spacing={0}
-            size="lg"
-            aria-label="Algorithm set"
-          >
-            {(["all", ...sets] as const).map((s) => (
-              <ToggleGroupItem key={s} value={s} className="px-3 font-semibold aria-pressed:bg-foreground aria-pressed:text-background">
-                {s === "all" ? "All" : setLabel(s)}
-              </ToggleGroupItem>
-            ))}
-          </ToggleGroup>
-          <Select items={STATUS_ITEMS} value={status} onValueChange={(v) => setStatusFilter((v ?? "all") as StatusFilter)}>
-            <SelectTrigger className="h-9 min-w-36" aria-label="Filter by status">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {STATUS_ITEMS.map((item) => (
-                <SelectItem key={item.value} value={item.value}>
-                  {item.value !== "all" && <span className={cn("size-2.5 rounded-full", SWATCH[item.value as Status])} />}
-                  {item.label}
-                </SelectItem>
+          {/* Phones keep the bar to two rows: these scroll sideways under the search. */}
+          <div className="-mx-4 flex w-[calc(100%+2rem)] items-center gap-2 overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden *:shrink-0 sm:contents">
+            <ToggleGroup
+              value={[set]}
+              onValueChange={(v) => {
+                if (!v[0]) return;
+                setSet(v[0] as SetFilter);
+                setGroup("all");
+              }}
+              variant="outline"
+              spacing={0}
+              size="lg"
+              aria-label="Algorithm set"
+            >
+              {(["all", ...sets] as const).map((s) => (
+                <ToggleGroupItem key={s} value={s} className="px-3 font-semibold aria-pressed:bg-foreground aria-pressed:text-background">
+                  {s === "all" ? "All" : setLabel(s)}
+                </ToggleGroupItem>
               ))}
-            </SelectContent>
-          </Select>
-          <Select items={groupItems} value={group} onValueChange={(v) => setGroup(v ?? "all")}>
-            <SelectTrigger className="h-9 min-w-36" aria-label="Filter by shape">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {groupItems.map((item) => (
-                <SelectItem key={item.value} value={item.value}>
-                  {item.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {filtered && (
-            <Button variant="ghost" size="lg" onClick={clear}>
-              <XIcon data-icon="inline-start" />
-              Clear
-            </Button>
-          )}
+            </ToggleGroup>
+            <Select items={STATUS_ITEMS} value={status} onValueChange={(v) => setStatusFilter((v ?? "all") as StatusFilter)}>
+              <SelectTrigger className="h-9 min-w-36" aria-label="Filter by status">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {STATUS_ITEMS.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.value !== "all" && <span className={cn("size-2.5 rounded-full", SWATCH[item.value as Status])} />}
+                    {item.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select items={groupItems} value={group} onValueChange={(v) => setGroup(v ?? "all")}>
+              <SelectTrigger className="h-9 min-w-36" aria-label="Filter by shape">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {groupItems.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {filtered && (
+              <Button variant="ghost" size="lg" onClick={clear}>
+                <XIcon data-icon="inline-start" />
+                Clear
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 

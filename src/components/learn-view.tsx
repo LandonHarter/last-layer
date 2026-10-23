@@ -35,6 +35,7 @@ import { setPuzzle, usePuzzle } from "@/lib/puzzle-choice";
 import { HOLD, notationOf, PUZZLE_NAMES, SET_INFO, setLabel, setsOf, type Puzzle } from "@/lib/puzzles";
 import { chunkAlg, describeAlg, memoryTips, type Chunk } from "@/lib/triggers";
 import { cn } from "@/lib/utils";
+import { PageIntro } from "@/components/page-intro";
 
 const TOGGLE_ITEM = "px-3 font-semibold aria-pressed:bg-foreground aria-pressed:text-background";
 const SIZES = [3, 4, 5, 6];
@@ -76,14 +77,14 @@ export function LearnView() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-10 px-4 py-12 sm:px-6 md:py-16">
+    <div className="mx-auto flex w-full max-w-4xl flex-col gap-10 px-4 py-6 sm:px-6 md:py-16">
       <div>
-        <h1 className="text-4xl font-extrabold leading-[1.05] tracking-tight sm:text-5xl">Learn a few at a time</h1>
-        <p className="mt-4 max-w-prose text-base leading-relaxed text-muted-foreground">
+        <h1 className="text-[2rem] font-extrabold leading-[1.05] tracking-tight sm:text-5xl">Learn a few at a time</h1>
+        <PageIntro>
           Work through a small batch of cases that belong together. For each one you pick the algorithm you like, learn
           it chunk by chunk, then recall it from the picture. A new case only comes in once the last one sticks, and the
           batch is done when you get every case {SOLID} times in a row without peeking.
-        </p>
+        </PageIntro>
       </div>
 
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3">

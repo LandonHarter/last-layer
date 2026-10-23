@@ -42,7 +42,7 @@ export function StatusToggle({
         <ToggleGroupItem
           key={s}
           value={s}
-          className={cn("flex-1 px-1.5 font-semibold text-muted-foreground", size === "sm" && "text-[0.72rem]", ACTIVE[s])}
+          className={cn("flex-1 px-1.5 font-semibold text-muted-foreground", size === "sm" && "h-9 text-xs sm:h-7 sm:text-[0.72rem]", ACTIVE[s])}
         >
           {STATUS_LABELS[s]}
         </ToggleGroupItem>

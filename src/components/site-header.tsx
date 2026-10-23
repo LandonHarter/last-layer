@@ -10,7 +10,7 @@ import { ThemeSelector } from "@/components/theme-selector";
 import { MODE_HOME, modeForPath, setStoredMode, useStoredMode, type Mode } from "@/lib/mode";
 import { cn } from "@/lib/utils";
 
-// Below sm the nav shows icons only, so the header fits a phone.
+// From md the nav sits in the header; below it, in the tab bar at the bottom of the screen.
 const NAV: Record<Mode, { href: string; label: string; Icon: LucideIcon }[]> = {
   algs: [
     { href: "/", label: "Library", Icon: BookOpenIcon },
@@ -31,12 +31,22 @@ const MODES: { id: Mode; label: string; Icon: typeof TimerIcon }[] = [
   { id: "timer", label: "Timer", Icon: TimerIcon },
 ];
 
-export function SiteHeader() {
+// Fades out with the header while the timer runs.
+const HIDE_WHILE_TIMING = "transition-opacity duration-200 in-data-timing:pointer-events-none in-data-timing:opacity-0";
+
+function useNav() {
   const pathname = usePathname();
-  const router = useRouter();
   const stored = useStoredMode();
   const pathMode = modeForPath(pathname);
   const mode = pathMode ?? stored;
+  // Case pages belong to the Library.
+  const isActive = (href: string) => (href === "/" ? pathname === "/" || pathname.startsWith("/algs") : pathname.startsWith(href));
+  return { mode, pathMode, stored, items: NAV[mode], isActive };
+}
+
+export function SiteHeader() {
+  const router = useRouter();
+  const { mode, pathMode, stored, items, isActive } = useNav();
 
   // Opening a page of one mode switches to it, so Analyze shows what you were last doing.
   useEffect(() => {
@@ -50,9 +60,9 @@ export function SiteHeader() {
   }
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border bg-background/85 backdrop-blur transition-opacity duration-200 in-data-timing:pointer-events-none in-data-timing:opacity-0">
-      <div className="mx-auto flex h-14 max-w-7xl items-center gap-1.5 px-3 sm:gap-4 sm:px-6">
-        <Link href={MODE_HOME[mode]} className="mr-1 hidden text-lg font-extrabold tracking-tight sm:block">
+    <header className={cn("sticky top-0 z-40 border-b border-border bg-background/85 pt-[env(safe-area-inset-top)] backdrop-blur", HIDE_WHILE_TIMING)}>
+      <div className="mx-auto flex h-14 max-w-7xl items-center gap-2 px-4 sm:px-6 md:gap-4">
+        <Link href={MODE_HOME[mode]} className="mr-1 hidden text-lg font-extrabold tracking-tight md:block">
           Last Layer
         </Link>
         <div role="radiogroup" aria-label="Mode" className="flex shrink-0 rounded-lg border border-border bg-card p-0.5">
@@ -62,36 +72,31 @@ export function SiteHeader() {
               type="button"
               role="radio"
               aria-checked={mode === id}
-              aria-label={label}
               onClick={() => choose(id)}
               className={cn(
-                "flex h-7 items-center gap-1.5 rounded-md px-1.5 text-sm font-semibold transition-colors",
+                "flex h-8 items-center gap-1.5 rounded-md px-2.5 text-sm font-semibold transition-colors md:h-7 md:px-1.5",
                 mode === id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
               )}
             >
               <Icon className="size-4" aria-hidden="true" />
-              <span className="hidden md:inline">{label}</span>
+              {label}
             </button>
           ))}
         </div>
-        <nav className="flex items-center gap-0.5 sm:gap-1">
-          {NAV[mode].map((item) => {
-            // Case pages belong to the Library.
-            const active = item.href === "/" ? pathname === "/" || pathname.startsWith("/algs") : pathname.startsWith(item.href);
+        <nav aria-label="Main" className="hidden items-center gap-1 md:flex">
+          {items.map((item) => {
+            const active = isActive(item.href);
             return (
               <Link
                 key={item.href}
                 href={item.href}
                 aria-current={active ? "page" : undefined}
-                aria-label={item.label}
-                title={item.label}
                 className={cn(
-                  "flex items-center rounded-md p-1.5 text-sm font-medium transition-colors sm:px-3",
+                  "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
                   active ? "bg-foreground text-background" : "text-muted-foreground hover:bg-muted hover:text-foreground",
                 )}
               >
-                <item.Icon className="size-4 sm:hidden" aria-hidden="true" />
-                <span className="hidden sm:inline">{item.label}</span>
+                {item.label}
               </Link>
             );
           })}
@@ -103,5 +108,47 @@ export function SiteHeader() {
         </div>
       </div>
     </header>
+  );
+}
+
+/** Phones get the nav as a tab bar at the bottom, in thumb reach, with a label under each icon. */
+export function TabBar() {
+  const { items, isActive } = useNav();
+  return (
+    <nav
+      aria-label="Main"
+      className={cn(
+        "fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/90 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden",
+        HIDE_WHILE_TIMING,
+      )}
+    >
+      <ul className="mx-auto flex h-16 max-w-lg items-stretch px-2">
+        {items.map((item) => {
+          const active = isActive(item.href);
+          return (
+            <li key={item.href} className="flex flex-1">
+              <Link
+                href={item.href}
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "group flex flex-1 flex-col items-center justify-center gap-1 rounded-lg text-[0.6875rem] font-semibold transition-colors focus-visible:outline-none",
+                  active ? "text-foreground" : "text-muted-foreground active:text-foreground",
+                )}
+              >
+                <span
+                  className={cn(
+                    "flex h-7 w-12 items-center justify-center rounded-full transition-colors group-focus-visible:ring-2 group-focus-visible:ring-ring",
+                    active ? "bg-foreground text-background" : "group-active:bg-muted",
+                  )}
+                >
+                  <item.Icon className="size-[1.125rem]" aria-hidden="true" />
+                </span>
+                {item.label}
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
   );
 }

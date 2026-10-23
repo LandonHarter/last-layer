@@ -232,6 +232,18 @@
   }
 }
 
+/* Heights of the fixed chrome, so sticky bars and the full-screen timer can make room for it.
+   The tab bar only shows below md. */
+:root {
+  --header-h: calc(3.5rem + 1px + env(safe-area-inset-top));
+  --tabbar-h: calc(4rem + 1px + env(safe-area-inset-bottom));
+}
+@media (width >= 48rem) {
+  :root {
+    --tabbar-h: 0px;
+  }
+}
+
 /* Condensed, heavy digits for the solve clock (Bricolage's width axis). */
 @utility font-clock {
   font-family: var(--font-bricolage);

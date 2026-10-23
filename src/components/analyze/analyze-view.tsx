@@ -94,10 +94,10 @@ const caseName = (id: string | undefined) => (id ? (ALGS_BY_ID.get(id)?.name ?? 
 export function AnalyzeView() {
   const mode = useStoredMode();
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-8 sm:px-6 md:py-12">
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-6 sm:px-6 md:py-12">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-4xl font-extrabold leading-[1.05] tracking-tight sm:text-5xl">Analyze</h1>
+          <h1 className="text-[2rem] font-extrabold leading-[1.05] tracking-tight sm:text-5xl">Analyze</h1>
           <p className="mt-3 max-w-prose text-base leading-relaxed text-muted-foreground">
             {mode === "timer"
               ? "Every solve you've timed, with its scramble. Filter it, chart it and test it."
@@ -137,7 +137,7 @@ function FilterSelect({ label, value, items, onChange, className }: { label: str
 
 function FilterBar({ children, summary }: { children: React.ReactNode; summary: string }) {
   return (
-    <div className="sticky top-14 z-30 -mx-4 flex flex-wrap items-center gap-2 border-b border-border bg-background/90 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
+    <div className="sticky top-(--header-h) z-30 -mx-4 flex flex-wrap items-center gap-2 border-b border-border bg-background/90 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
       {children}
       <p className="ml-auto text-sm text-muted-foreground tabular-nums" aria-live="polite">
         {summary}

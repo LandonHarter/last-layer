@@ -41,11 +41,12 @@ Sticker palettes for the picker previews live in `src/lib/themes.ts`, because th
 
 ## Layout
 
-- **Header:** sticky. Holds the wordmark (hidden below `sm`), the Algorithms/Timer mode switch (active filled with primary; icons only below `md`), that mode's nav (Library, Learn, Drill, Analyze, Tools or Timer, Analyze, Tools; active filled with foreground; icons only below `sm`), the backup button (a popover to save all data to a file or load one, which replaces this browser's or the account's data after a confirm), the theme button, and the account button (Sign in with Google, or your avatar with save status and Sign out). A new account gets a dialog: Load backup file, Use this browser's data (with counts), or Start fresh. Below `sm` the nav turns into icons so it fits at 375px. Opening a page of one mode switches to it; Analyze follows the last mode. While the timer runs, the header fades out (`data-timing` on `<html>`).
+- **Header:** sticky. Holds the wordmark (from `md`), the Algorithms/Timer mode switch (active filled with primary), that mode's nav (Library, Learn, Drill, Analyze, Tools or Timer, Analyze, Tools; active filled with foreground; from `md`), the backup button (a popover to save all data to a file or load one, which replaces this browser's or the account's data after a confirm), the theme button, and the account button (Sign in with Google, or your avatar with save status and Sign out). A new account gets a dialog: Load backup file, Use this browser's data (with counts), or Start fresh. Opening a page of one mode switches to it; Analyze follows the last mode. While the timer runs, the header fades out (`data-timing` on `<html>`).
+- **Phones (below `md`):** the app works like a home-screen app. The header keeps only the mode switch (with labels) and the three buttons; the nav moves to a fixed tab bar at the bottom (icon in a pill, filled with foreground when active, label under it), padded for the home indicator (`viewport-fit=cover`, `env(safe-area-inset-bottom)`). It fades with the header while timing. `--header-h` and `--tabbar-h` in `globals.css` hold the chrome heights for sticky bars, the main padding and the full-screen timer. Page explainers (`PageIntro`) show two lines and a More button, and headings start at 2rem.
 - **Library (`/`):**
   - Hero: headline (one per puzzle) and short explainer on the left, progress board for the puzzle's sets on the right. Every set is 3 rows at the same square size as 3x3 OLL (19 wide): F2L 14 (41 cases leave one gap), PLL 7.
-  - Filter bar: full width and sticky under the header. Contains the puzzle select (shared with Learn and Drill), search, an All plus that puzzle's sets toggle, a status select, and a shape select. Filters are kept in the URL (`?puzzle=&q=&set=&status=&shape=`, replaced rather than pushed; 3x3 leaves out `puzzle`), so a refresh or Back keeps them.
-  - Content: sections per set, then per shape group. Cards sit in an auto-fill grid (min 12.5rem). On mobile, cards switch to horizontal rows with the image on the left.
+  - Filter bar: full width and sticky under the header. On phones it keeps to two rows: puzzle and search, then the rest scrolling sideways. Contains the puzzle select (shared with Learn and Drill), search, an All plus that puzzle's sets toggle, a status select, and a shape select. Filters are kept in the URL (`?puzzle=&q=&set=&status=&shape=`, replaced rather than pushed; 3x3 leaves out `puzzle`), so a refresh or Back keeps them.
+  - Content: sections per set, then per shape group. Cards sit in an auto-fill grid (min 12.5rem). On mobile, cards switch to rows with the image on the left and the status toggle full width under it.
   - Card: case image on a muted tile, name (links to the case page), drill score, your main algorithm in mono, a link to the other algorithms, and a three-way status toggle.
 - **Learn (`/learn`):**
   - Overview: puzzle select and set toggle, cases per batch (3 to 6), learned count, your current batch (cases with stage or streak dots, Continue, Stop this batch), then suggested batches, each with case chips, why they belong together, and Start.
@@ -81,7 +82,7 @@ Sticker palettes for the picker previews live in `src/lib/themes.ts`, because th
   - Fewest moves: 60:00 countdown (learning under 5 min, missed when up), random-state scramble with R' U' F padding and an inverse toggle for NISS, a solution box counted and checked live, Submit, then a computer solution on request. Attempts (best, mean, count) on the right.
   - Solver, Scramble sheet (puzzle, 5/12/25/50, copy, print), Algorithm toolkit (counts in four metrics, inverse, mirrors, cleaned up, face turns only, the net it makes), Average calculator (mo3/ao5/ao12, best and worst possible and the time needed on the last solve).
 - **Case (`/algs/[id]`):**
-  - Top: breadcrumb (puzzle, unless 3x3 / set / group) and previous/next case links. Other puzzles add a line under the group on what the step does.
+  - Top: back to the Library, breadcrumb (puzzle, unless 3x3 / set / group; hidden on phones) and previous/next case links, in one row. Other puzzles add a line under the group on what the step does.
   - Case image on the left (sticky on desktop). On the right: name, group, status toggle, your algorithm in large bold mono split into groups (`chunkAlg`: each trigger or chunk underlined, well-known triggers named beneath), a Your notes textarea (saved as you type, shown as the Drill hint), and a practice setup card.
   - Algorithms: a radio list, one row per algorithm, each algorithm underlined in groups like your algorithm (no names), with move count and "Default" or "Yours" tags. A filled square sticker (primary color) marks your main, echoing the progress board. Your own algorithms have Remove.
   - Add your own: a mono input. The algorithm is checked on the simulator. If it needs a turn of the top first, it is stored with that turn, and a toast says so.
@@ -91,6 +92,8 @@ Sticker palettes for the picker previews live in `src/lib/themes.ts`, because th
 shadcn (base-nova style, Base UI primitives) in `src/components/ui`. App pieces:
 
 - `cube-art.tsx`: `IsoCube` (isometric 3-face SVG) and `FlatFace` (3x3 button icon)
+- `site-header.tsx`: `SiteHeader` and the phone `TabBar`
+- `page-intro.tsx`: `PageIntro`, the explainer that collapses on phones
 - `theme-selector.tsx`: popover picker with the switch animation
 - `puzzle-select.tsx`: the puzzle select used by Library, Learn and Drill
 - `algs/`: `CaseImage`, `MoveSequence`, `StatusToggle`, `AlgCard`, `NotesField` (notes textarea shared by the case page, Learn and Drill)
