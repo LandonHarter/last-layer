@@ -385,7 +385,181 @@ export function welchTTest(a: number[], b: number[]) {
   const df = (va + vb) ** 2 / (va ** 2 / (a.length - 1) + vb ** 2 / (b.length - 1));
   const half = tQuantile(0.975, df) * se;
   const pooled = Math.sqrt(((a.length - 1) * variance(a) + (b.length - 1) * variance(b)) / (a.length + b.length - 2));
-  return { diff, t, df, p: tTwoSided(t, df), low: diff - half, high: diff + half, d: diff / pooled };
+  const less = tCdf(t, df);
+  return { diff, t, df, p: tTwoSided(t, df), less, greater: 1 - less, low: diff - half, high: diff + half, d: diff / pooled };
+}
+
+/**
+ * One-sided p-values for a statistic where small means a is lower (faster) than b.
+ * `less` is the p-value for "a is lower", `greater` for "a is higher".
+ */
+export type Sided = { p: number; less: number; greater: number };
+
+/** Student's two-sample t-test, assuming both groups share one spread. diff is mean(a) - mean(b). */
+export function studentTTest(a: number[], b: number[]): (Sided & { diff: number; t: number; df: number; low: number; high: number }) | null {
+  const na = a.length;
+  const nb = b.length;
+  if (na < 2 || nb < 2) return null;
+  const df = na + nb - 2;
+  const pooled = ((na - 1) * variance(a) + (nb - 1) * variance(b)) / df;
+  const se = Math.sqrt(pooled * (1 / na + 1 / nb));
+  if (se === 0) return null;
+  const diff = mean(a) - mean(b);
+  const t = diff / se;
+  const half = tQuantile(0.975, df) * se;
+  const less = tCdf(t, df);
+  return { diff, t, df, p: tTwoSided(t, df), less, greater: 1 - less, low: diff - half, high: diff + half };
+}
+
+/** Average ranks (1-based) of the combined values, ties sharing their mean rank. DNFs rank last. */
+function ranks(values: number[]): number[] {
+  const order = values.map((v, i) => [v, i] as const).sort((x, y) => (x[0] === y[0] ? 0 : x[0] < y[0] ? -1 : 1));
+  const r = new Array<number>(values.length);
+  for (let i = 0; i < order.length; ) {
+    let j = i;
+    while (j + 1 < order.length && order[j + 1][0] === order[i][0]) j++;
+    for (let k = i; k <= j; k++) r[order[k][1]] = (i + j) / 2 + 1;
+    i = j + 1;
+  }
+  return r;
+}
+
+/**
+ * Mann-Whitney U (Wilcoxon rank-sum) with the normal approximation, tie and
+ * continuity corrections. Works on ranks, so DNFs can stay in as the slowest.
+ * `superiority` is the chance a random time from a beats one from b (ties half).
+ */
+export function mannWhitneyU(a: number[], b: number[]): (Sided & { u: number; z: number; superiority: number }) | null {
+  const na = a.length;
+  const nb = b.length;
+  if (na < 3 || nb < 3) return null;
+  const all = [...a, ...b];
+  const r = ranks(all);
+  let ra = 0;
+  for (let i = 0; i < na; i++) ra += r[i];
+  const u = ra - (na * (na + 1)) / 2;
+  const n = na + nb;
+  // Tie correction: sum of t^3 - t over tied groups.
+  const counts = new Map<number, number>();
+  for (const v of all) counts.set(v, (counts.get(v) ?? 0) + 1);
+  let ties = 0;
+  for (const t of counts.values()) ties += t ** 3 - t;
+  const sigma = Math.sqrt(((na * nb) / 12) * (n + 1 - ties / (n * (n - 1))));
+  if (sigma === 0) return null;
+  const mu = (na * nb) / 2;
+  const z = (u - mu) / sigma;
+  // Large u means a is slower. Continuity correction of 0.5 towards the middle.
+  const less = normalCdf((u - mu + 0.5) / sigma);
+  const greater = 1 - normalCdf((u - mu - 0.5) / sigma);
+  return { u, z, p: Math.min(1, 2 * Math.min(less, greater)), less, greater, superiority: 1 - u / (na * nb) };
+}
+
+/** Kolmogorov distribution tail Q(λ) = 2 Σ (-1)^(k-1) e^(-2k²λ²). */
+function kolmogorovQ(lambda: number): number {
+  if (lambda < 0.2) return 1;
+  let s = 0;
+  for (let k = 1; k <= 100; k++) {
+    const term = 2 * (k % 2 ? 1 : -1) * Math.exp(-2 * k * k * lambda * lambda);
+    s += term;
+    if (Math.abs(term) < 1e-12) break;
+  }
+  return Math.max(0, Math.min(1, s));
+}
+
+/**
+ * Two-sample Kolmogorov-Smirnov test on the whole distribution (asymptotic p, Stephens' correction).
+ * `dLess` is the largest gap where a's times are ahead (a faster), `dGreater` where b's are.
+ */
+export function ksTest(a: number[], b: number[]): (Sided & { d: number; dLess: number; dGreater: number }) | null {
+  const na = a.length;
+  const nb = b.length;
+  if (na < 5 || nb < 5) return null;
+  const sa = sorted(a);
+  const sb = sorted(b);
+  let i = 0;
+  let j = 0;
+  let dLess = 0;
+  let dGreater = 0;
+  while (i < na || j < nb) {
+    const x = Math.min(i < na ? sa[i] : Infinity, j < nb ? sb[j] : Infinity);
+    if (x === Infinity) break;
+    while (i < na && sa[i] === x) i++;
+    while (j < nb && sb[j] === x) j++;
+    const gap = i / na - j / nb;
+    dLess = Math.max(dLess, gap);
+    dGreater = Math.max(dGreater, -gap);
+  }
+  const ne = (na * nb) / (na + nb);
+  const scale = Math.sqrt(ne) + 0.12 + 0.11 / Math.sqrt(ne);
+  const d = Math.max(dLess, dGreater);
+  const oneSided = (dd: number) => Math.min(1, Math.exp(-2 * ne * dd * dd));
+  return { d, dLess, dGreater, p: kolmogorovQ(scale * d), less: oneSided(dLess), greater: oneSided(dGreater) };
+}
+
+/**
+ * Brown-Forsythe test for equal spread (Levene's test around the median). With two
+ * groups the F statistic is the square of a pooled t on the distances from each median.
+ * `less` is the p-value for "a is more consistent".
+ */
+export function brownForsythe(a: number[], b: number[]): (Sided & { f: number; df: number; spreadA: number; spreadB: number }) | null {
+  if (a.length < 3 || b.length < 3) return null;
+  const ma = median(a);
+  const mb = median(b);
+  const da = a.map((x) => Math.abs(x - ma));
+  const db = b.map((x) => Math.abs(x - mb));
+  const t = studentTTest(da, db);
+  if (!t) return null;
+  return { f: t.t ** 2, df: t.df, p: t.p, less: t.less, greater: t.greater, spreadA: mean(da), spreadB: mean(db) };
+}
+
+/** Small seeded generator so simulated results don't flicker between renders. */
+export function seededRandom(seed: number) {
+  let t = seed >>> 0;
+  return () => {
+    t = (t + 0x6d2b79f5) >>> 0;
+    let r = Math.imul(t ^ (t >>> 15), 1 | t);
+    r = (r + Math.imul(r ^ (r >>> 7), 61 | r)) ^ r;
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * Permutation test on any statistic of the two groups (diff = stat(a) - stat(b)):
+ * shuffle the labels many times and see how often chance alone gives a gap this big.
+ * Also a bootstrap 95% interval for the gap.
+ */
+export function permutationTest(a: number[], b: number[], stat: (xs: number[]) => number, rounds = 4000, seed = 1): (Sided & { diff: number; low: number; high: number }) | null {
+  const na = a.length;
+  const nb = b.length;
+  if (na < 3 || nb < 3) return null;
+  const diff = stat(a) - stat(b);
+  if (!Number.isFinite(diff)) return null;
+  const random = seededRandom(seed * 7919 + na * 31 + nb);
+  const all = [...a, ...b];
+  let lessHits = 0;
+  let greaterHits = 0;
+  let twoHits = 0;
+  const eps = 1e-9 * Math.max(1, Math.abs(diff));
+  for (let k = 0; k < rounds; k++) {
+    // Partial Fisher-Yates: the first na after shuffling form the new a.
+    for (let i = 0; i < na; i++) {
+      const j = i + Math.floor(random() * (all.length - i));
+      [all[i], all[j]] = [all[j], all[i]];
+    }
+    const d = stat(all.slice(0, na)) - stat(all.slice(na));
+    if (d <= diff + eps) lessHits++;
+    if (d >= diff - eps) greaterHits++;
+    if (Math.abs(d) >= Math.abs(diff) - eps) twoHits++;
+  }
+  const boot: number[] = [];
+  const draw = (xs: number[]) => xs.map(() => xs[Math.floor(random() * xs.length)]);
+  for (let k = 0; k < 2000; k++) {
+    const d = stat(draw(a)) - stat(draw(b));
+    if (Number.isFinite(d)) boot.push(d);
+  }
+  const s = sorted(boot);
+  const p = (hits: number) => (hits + 1) / (rounds + 1);
+  return { diff, p: p(twoHits), less: p(lessHits), greater: p(greaterHits), low: quantileSorted(s, 0.025), high: quantileSorted(s, 0.975) };
 }
 
 /** Wilson score interval for a proportion. */

@@ -11,6 +11,7 @@ import {
   mean,
   normalCdf,
   quantile,
+  seededRandom,
   shapiroWilk,
   skewness,
   stdev,
@@ -50,7 +51,7 @@ export function Panel({ title, children, controls, className }: { title: string;
   );
 }
 
-function Figures({ items }: { items: [string, ReactNode][] }) {
+export function Figures({ items }: { items: [string, ReactNode][] }) {
   return (
     <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-3">
       {items.map(([label, value]) => (
@@ -63,7 +64,7 @@ function Figures({ items }: { items: [string, ReactNode][] }) {
   );
 }
 
-function Verdict({ children }: { children: ReactNode }) {
+export function Verdict({ children }: { children: ReactNode }) {
   return <p className="text-sm leading-relaxed">{children}</p>;
 }
 
@@ -311,17 +312,6 @@ function GroupPick({ value, values, onChange, label }: { value: string; values: 
 
 // ---------------------------------------------------------------------------
 
-/** Small seeded generator so simulated chances don't flicker between renders. */
-function mulberry32(seed: number) {
-  let t = seed >>> 0;
-  return () => {
-    t = (t + 0x6d2b79f5) >>> 0;
-    let r = Math.imul(t ^ (t >>> 15), 1 | t);
-    r = (r + Math.imul(r ^ (r >>> 7), 61 | r)) ^ r;
-    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
 /**
  * Chance that one solve, an ao5 and an ao12 come in under a target.
  * Singles use your actual times and two fitted curves; averages are simulated by
@@ -341,7 +331,7 @@ export function ChancesTest({ pool, format, averages }: { pool: number[]; format
     const lm = mean(logs);
     const ls = stdev(logs);
     const single = pool.filter((v) => v < targetMs).length / pool.length;
-    const random = mulberry32(pool.length * 7919 + Math.round(targetMs));
+    const random = seededRandom(pool.length * 7919 + Math.round(targetMs));
     const sims = 4000;
     const simulate = (n: number) => {
       let hits = 0;

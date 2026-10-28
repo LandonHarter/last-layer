@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { ALGS, ALGS_BY_ID, caseLabel, fullSetLabel, SETS } from "@/data/algs";
 import { GroupBarChart, HistogramChart, Legend, QQChart, TrendChart, type Fit, type GroupBar, type TrendLine } from "@/components/analyze/charts";
 import { DailySection } from "@/components/analyze/daily";
+import { SessionCompare } from "@/components/analyze/session-compare";
 import { ChancesTest, CompareTest, NormalityTest, Panel, TrendTest, type Sample } from "@/components/analyze/tests";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -185,6 +186,18 @@ function TimerAnalysis() {
       .sort((a, b) => a.at - b.at);
     return inRange(picked, range);
   }, [data.solves, session, oll, pll, range]);
+  // Session comparison ignores the session filter; a "Latest N" range applies to each session.
+  const compareSolves = useMemo(() => {
+    const picked = data.solves.filter((s) => (oll === "all" || s.oll === oll) && (pll === "all" || s.pll === pll)).sort((a, b) => a.at - b.at);
+    if (!range.startsWith("n")) return inRange(picked, range);
+    const bySession = new Map<string, Solve[]>();
+    for (const s of picked) {
+      const list = bySession.get(s.session);
+      if (list) list.push(s);
+      else bySession.set(s.session, [s]);
+    }
+    return [...bySession.values()].flatMap((list) => inRange(list, range));
+  }, [data.solves, oll, pll, range]);
   // Only offer cases you've tagged a solve with.
   const tagged = useMemo(() => {
     const used = (step: "oll" | "pll") => {
@@ -237,6 +250,17 @@ function TimerAnalysis() {
         <p className="text-base text-muted-foreground">Nothing in this range. Try All time or another session.</p>
       ) : (
         <Analysis samples={samples} kind="timer" dimensions={["Session", "OLL", "PLL", "Time of day", "Weekday", "Month"]} />
+      )}
+      {data.sessions.length >= 2 && (
+        <section aria-labelledby="compare-sessions" className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1">
+            <h2 id="compare-sessions" className="text-2xl font-extrabold tracking-tight">
+              Compare sessions
+            </h2>
+            <p className="text-sm text-muted-foreground">Pick any two sessions. The case, range and outlier filters above apply; the session filter doesn&apos;t.</p>
+          </div>
+          <SessionCompare solves={compareSolves} sessions={data.sessions} current={data.current} rule={rule} />
+        </section>
       )}
       <SolveTable solves={solves} samples={samples} sessionName={sessionName} />
     </>

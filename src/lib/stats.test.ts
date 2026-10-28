@@ -6,7 +6,13 @@ import { cubeSize, randomScramble, scrambledNet, scrambledNetN, scrambleFor, TIM
 import {
   averageOf,
   bestAverage,
+  brownForsythe,
   DNF,
+  ksTest,
+  mannWhitneyU,
+  median,
+  permutationTest,
+  studentTTest,
   linearRegression,
   normalCdf,
   normalQuantile,
@@ -67,6 +73,47 @@ test("Welch t-test sees a clear difference", () => {
   const r = welchTTest([10, 11, 12, 11, 10, 12], [14, 15, 16, 15, 14, 16])!;
   expect(r.diff).toBeCloseTo(-4, 10);
   expect(r.p).toBeLessThan(0.001);
+});
+
+// Reference values from SciPy (ttest_ind, mannwhitneyu asymptotic, levene center=median).
+const SLOWER_A = [10, 11, 12, 11, 10, 12, 13, 9];
+const SLOWER_B = [12, 13, 14, 12, 15, 13, 16, 14];
+
+test("Student t-test matches SciPy", () => {
+  const r = studentTTest(SLOWER_A, SLOWER_B)!;
+  expect(r.p).toBeCloseTo(0.001727, 5);
+  expect(r.less).toBeCloseTo(r.p / 2, 8);
+});
+
+test("Mann-Whitney U matches SciPy, and keeps DNFs as the slowest", () => {
+  const r = mannWhitneyU(SLOWER_A, SLOWER_B)!;
+  expect(r.p).toBeCloseTo(0.004825, 5);
+  expect(r.less).toBeCloseTo(0.002412, 5);
+  expect(r.superiority).toBeGreaterThan(0.8);
+  const withDnf = mannWhitneyU([...SLOWER_A, DNF], SLOWER_B)!;
+  expect(withDnf.u).toBeGreaterThan(r.u);
+});
+
+test("Brown-Forsythe matches SciPy's Levene around the median", () => {
+  const r = brownForsythe(SLOWER_A, SLOWER_B)!;
+  expect(r.f).toBeCloseTo(0.1111, 4);
+  expect(r.p).toBeCloseTo(0.7438, 4);
+});
+
+test("Kolmogorov-Smirnov tells shifted groups apart, not identical ones", () => {
+  const xs = Array.from({ length: 60 }, (_, i) => 10 + (i % 12) * 0.5);
+  expect(ksTest(xs, xs.map((x) => x + 3))!.p).toBeLessThan(0.001);
+  expect(ksTest(xs, xs.map((x) => x + 3))!.less).toBeLessThan(0.001);
+  expect(ksTest(xs, [...xs].reverse())!.p).toBeCloseTo(1, 5);
+});
+
+test("permutation test on medians sees a clear gap and stays stable", () => {
+  const r = permutationTest(SLOWER_A, SLOWER_B, median)!;
+  expect(r.diff).toBe(-2.5);
+  expect(r.less).toBeLessThan(0.01);
+  expect(r.greater).toBeGreaterThan(0.99);
+  expect(r.low).toBeLessThan(r.diff);
+  expect(permutationTest(SLOWER_A, SLOWER_B, median)!.p).toBe(r.p);
 });
 
 test("IQR filter drops a far outlier", () => {
