@@ -93,6 +93,13 @@ export function DrillView() {
         </PageIntro>
       </div>
 
+      {puzzle === "3x3" && (
+        <Link href="/drill/f2l" className="flex flex-col gap-1 rounded-xl border border-border bg-card p-5 transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring sm:p-6">
+          <span className="text-lg font-bold">F2L solution lab →</span>
+          <span className="text-sm text-muted-foreground">Train every slot and mirrors. Check your own moves, compare shorter solutions and practice weak spots.</span>
+        </Link>
+      )}
+
       <div className="flex flex-col gap-5 rounded-xl border border-border bg-card p-5 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <span className="text-sm font-semibold">Puzzle</span>
@@ -110,7 +117,8 @@ export function DrillView() {
               filterStore.write({ ...stored, sets: SETS.filter((s) => (puzzleSets.includes(s) ? v.includes(s) : stored.sets.includes(s))) })
             }
             variant="outline"
-            spacing={0}
+            spacing={2}
+            className="max-w-full flex-wrap justify-end"
             aria-label="Algorithm sets"
           >
             {puzzleSets.map((s) => (
@@ -354,7 +362,7 @@ function Session({
         </div>
 
         <div className="flex flex-col gap-7">
-          {timed && phase !== "setup" ? (
+          {timed && phase !== "setup" && (
             <section aria-label="Time" className="flex flex-col gap-1">
               <h2 className="text-sm font-semibold text-muted-foreground">
                 {phase === "timing" ? "Recognize and solve" : "Recognition and execution"}
@@ -365,16 +373,20 @@ function Session({
                 <p className="font-clock text-[clamp(3rem,8vw,5.5rem)] leading-none tabular-nums">{formatMs(elapsed)}</p>
               )}
             </section>
-          ) : (
+          )}
+
+          {(!timed || phase !== "timing") && (
             <section aria-labelledby="setup-label">
               <div className="mb-2 flex items-center justify-between gap-3">
                 <h2 id="setup-label" className="text-sm font-semibold text-muted-foreground">
                   Set up from solved, {HOLD[alg.puzzle]}
                 </h2>
-                <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={reroll}>
-                  <RefreshCwIcon data-icon="inline-start" />
-                  New setup <Kbd className="ml-1 hidden sm:inline-flex">N</Kbd>
-                </Button>
+                {(!timed || phase === "setup") && (
+                  <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={reroll}>
+                    <RefreshCwIcon data-icon="inline-start" />
+                    New setup <Kbd className="ml-1 hidden sm:inline-flex">N</Kbd>
+                  </Button>
+                )}
               </div>
               <MoveSequence
                 key={session.setup}

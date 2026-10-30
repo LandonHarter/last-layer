@@ -6,11 +6,12 @@ import { SearchIcon, XIcon } from "lucide-react";
 import { algsOf, GROUPS, SET_TITLES, type Alg, type AlgSet } from "@/data/algs";
 import { AlgCard } from "@/components/algs/alg-card";
 import { PuzzleSelect } from "@/components/puzzle-select";
+import { SetSelect } from "@/components/set-select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { saveLibrarySpot, takeLibraryScroll } from "@/lib/library-return";
+import { libraryPageCount, saveLibraryPageCount, saveLibrarySpot, takeLibraryScroll } from "@/lib/library-return";
 import { entryFor, STATUS_LABELS, useProgress, type Progress, type Status } from "@/lib/progress";
 import { setPuzzle, usePuzzle } from "@/lib/puzzle-choice";
 import { HEADLINES, PUZZLE_NAMES, PUZZLES, setLabel, setsOf, type Puzzle } from "@/lib/puzzles";
@@ -32,7 +33,7 @@ const SWATCH: Record<Status, string> = {
 };
 
 const bareName = (alg: Alg) =>
-  alg.name.toLowerCase().replace(/^(f2l|oll|eo|co|ep|cp) /, "").replace(/ perm$/, "");
+  alg.name.toLowerCase().replace(new RegExp(`^${setLabel(alg.set).toLowerCase()}\\s+`), "").replace(/ perm$/, "");
 
 /** Search matcher over one puzzle's cases. A query naming a case ("21", "t perm", "j") shows just those cases. */
 function makeMatcher(query: string, algs: Alg[]): (alg: Alg) => boolean {
@@ -40,9 +41,11 @@ function makeMatcher(query: string, algs: Alg[]): (alg: Alg) => boolean {
   if (!raw) return () => true;
   const q = raw.toLowerCase();
   // "oll 21" means that case only; a bare "21" matches both F2L 21 and OLL 21.
-  const prefix = /^(f2l|oll|pll|pbl|eo|co|ep|cp)\b/.exec(q)?.[1]?.toUpperCase();
-  const inSet = (a: Alg) => !prefix || setLabel(a.set).toUpperCase() === prefix;
-  const bare = q.replace(/^(f2l|oll|pll|pbl|eo|co|ep|cp)\s*/, "").replace(/\s*perm$/, "");
+  const prefix = [...new Set(algs.map((a) => setLabel(a.set)))].sort((a, b) => b.length - a.length)
+    .find((label) => q === label.toLowerCase() || q.startsWith(`${label.toLowerCase()} `));
+  const inSet = (a: Alg) => !prefix || setLabel(a.set).toUpperCase() === prefix.toUpperCase();
+  const bare = (prefix ? q.slice(prefix.length).trim() : q).replace(/\s*perm$/, "");
+  if (prefix && !bare) return inSet;
   if (algs.some((a) => inSet(a) && bareName(a) === bare)) return (a) => inSet(a) && bareName(a) === bare;
   // "j" or "g" means the J or G perms, not every shape with that letter in it.
   if (/^[a-z]$/.test(bare) && algs.some((a) => a.set === "PLL" && bareName(a).startsWith(bare))) {
@@ -100,6 +103,7 @@ export function LibraryView({ initial = DEFAULT_FILTERS, syncUrl = false }: { in
   const [chosenSet, setSet] = useState<SetFilter>(initial.set);
   const [status, setStatusFilter] = useState<StatusFilter>(initial.status);
   const [chosenGroup, setGroup] = useState(initial.group);
+  const [page, setPage] = useState({ key: "", count: 60 });
   const deferredQuery = useDeferredValue(query);
   const sets = setsOf(puzzle);
   // A set or shape from another puzzle (an old link, or the puzzle changed elsewhere) means no filter.
@@ -115,11 +119,14 @@ export function LibraryView({ initial = DEFAULT_FILTERS, syncUrl = false }: { in
   // Back to library from a case puts you where you were; keep that spot up to date as you scroll.
   useEffect(() => {
     if (!syncUrl) return;
+    const count = libraryPageCount();
+    if (count > 60) setPage({ key: [puzzle, deferredQuery, set, status, group].join("|"), count });
     const y = takeLibraryScroll();
-    if (y !== null) window.scrollTo(0, y);
+    const restoreFrame = y !== null ? requestAnimationFrame(() => window.scrollTo(0, y)) : 0;
     let frame = 0;
     const onScroll = () => {
       cancelAnimationFrame(frame);
+      cancelAnimationFrame(restoreFrame);
       frame = requestAnimationFrame(saveLibrarySpot);
     };
     window.addEventListener("scroll", onScroll, { passive: true });
@@ -159,6 +166,8 @@ export function LibraryView({ initial = DEFAULT_FILTERS, syncUrl = false }: { in
       (group === "all" || `${a.set}:${a.group}` === group) &&
       matches(a),
   );
+  const pageKey = [puzzle, deferredQuery, set, status, group].join("|");
+  const shown = visible.slice(0, page.key === pageKey ? page.count : 60);
 
   const filtered = query !== "" || set !== "all" || status !== "all" || group !== "all";
   const clear = () => {
@@ -179,7 +188,7 @@ export function LibraryView({ initial = DEFAULT_FILTERS, syncUrl = false }: { in
             Open a case to see every algorithm for it and pick the one you use.
           </PageIntro>
         </div>
-        <ProgressBoard progress={progress} puzzle={puzzle} />
+        <ProgressBoard progress={progress} puzzle={puzzle} set={set} />
       </section>
 
       <div className="sticky top-(--header-h) z-30 mb-6 border-y border-border bg-background/90 py-3 backdrop-blur">
@@ -197,7 +206,7 @@ export function LibraryView({ initial = DEFAULT_FILTERS, syncUrl = false }: { in
           </div>
           {/* Phones keep the bar to two rows: these scroll sideways under the search. */}
           <div className="-mx-4 flex w-[calc(100%+2rem)] items-center gap-2 overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden *:shrink-0 sm:contents">
-            <ToggleGroup
+            {sets.length > 6 ? <SetSelect puzzle={puzzle} value={set} all onChange={(v) => { setSet(v); setGroup("all"); }} /> : <ToggleGroup
               value={[set]}
               onValueChange={(v) => {
                 if (!v[0]) return;
@@ -214,7 +223,7 @@ export function LibraryView({ initial = DEFAULT_FILTERS, syncUrl = false }: { in
                   {s === "all" ? "All" : setLabel(s)}
                 </ToggleGroupItem>
               ))}
-            </ToggleGroup>
+            </ToggleGroup>}
             <Select items={STATUS_ITEMS} value={status} onValueChange={(v) => setStatusFilter((v ?? "all") as StatusFilter)}>
               <SelectTrigger className="h-9 min-w-36" aria-label="Filter by status">
                 <SelectValue />
@@ -252,7 +261,7 @@ export function LibraryView({ initial = DEFAULT_FILTERS, syncUrl = false }: { in
 
       <div className="mx-auto w-full max-w-7xl px-4 pb-24 sm:px-6">
       <p className="mb-4 text-sm text-muted-foreground" aria-live="polite">
-        Showing {visible.length} of {puzzleAlgs.length}
+        Showing {shown.length} of {visible.length}{filtered && ` matching cases (${puzzleAlgs.length} total)`}
       </p>
 
       {visible.length === 0 ? (
@@ -264,7 +273,16 @@ export function LibraryView({ initial = DEFAULT_FILTERS, syncUrl = false }: { in
           </Button>
         </div>
       ) : (
-        <Sections algs={visible} progress={progress} puzzle={puzzle} />
+        <Sections algs={shown} progress={progress} puzzle={puzzle} />
+      )}
+      {shown.length < visible.length && (
+        <Button variant="outline" className="mt-8 w-full" onClick={() => {
+          const count = shown.length + 60;
+          setPage({ key: pageKey, count });
+          if (syncUrl) saveLibraryPageCount(count);
+        }}>
+          Show more cases ({visible.length - shown.length} remaining)
+        </Button>
       )}
       </div>
     </>
@@ -312,10 +330,13 @@ function Sections({ algs, progress, puzzle }: { algs: Alg[]; progress: Progress;
 const boardColumns = (n: number) => Math.ceil(n / Math.max(3, Math.ceil(n / 19)));
 
 /** One square per algorithm, coloured by status: progress read like a cube face. */
-function ProgressBoard({ progress, puzzle }: { progress: Progress; puzzle: Puzzle }) {
+function ProgressBoard({ progress, puzzle, set: selected }: { progress: Progress; puzzle: Puzzle; set: SetFilter }) {
+  const sets = selected === "all" ? setsOf(puzzle) : [selected];
+  const compact = selected === "all" && sets.length > 6;
   return (
-    <div className="flex flex-col gap-4">
-      {setsOf(puzzle).map((set) => {
+    <div className="max-h-80 overflow-y-auto overscroll-contain pr-1" role="region" aria-label="Learning progress" tabIndex={0}>
+    <div className={cn("grid gap-4", compact && "grid-cols-1 sm:grid-cols-2")}>
+      {sets.map((set) => {
         const algs = algsOf(puzzle).filter((a) => a.set === set);
         const counts = { learning: 0, learned: 0 };
         for (const a of algs) {
@@ -327,12 +348,15 @@ function ProgressBoard({ progress, puzzle }: { progress: Progress; puzzle: Puzzl
             <div className="mb-1.5 flex items-baseline justify-between text-sm">
               <span className="font-bold">{setLabel(set)}</span>
               <span className="text-muted-foreground tabular-nums">
-                {counts.learned} learned, {counts.learning} in progress, of {algs.length}
+                {compact ? `${counts.learned} / ${algs.length}` : `${counts.learned} learned, ${counts.learning} in progress, of ${algs.length}`}
               </span>
             </div>
             {/* Three rows each, at the same sticker size as the widest (3x3 OLL, 19 wide): F2L 14 (41 leaves one gap), PLL 7.
                 Bigger sets (Square-1 cubeshape) add rows instead of growing wider. */}
-            <div
+            {compact ? <div className="flex h-2 overflow-hidden rounded-full bg-unknown" aria-label={`${setLabel(set)}: ${counts.learned} learned, ${counts.learning} in progress, of ${algs.length}`}>
+              <span className="bg-learned" style={{ width: `${counts.learned / algs.length * 100}%` }} />
+              <span className="bg-learning" style={{ width: `${counts.learning / algs.length * 100}%` }} />
+            </div> : <div
               className="grid gap-[3px] rounded-md bg-foreground p-[3px]"
               style={{
                 gridTemplateColumns: `repeat(${boardColumns(algs.length)}, minmax(0, 1fr))`,
@@ -346,11 +370,12 @@ function ProgressBoard({ progress, puzzle }: { progress: Progress; puzzle: Puzzl
                   className={cn("aspect-square rounded-[2px] transition-colors duration-300", SWATCH[entryFor(progress, a.id).status])}
                 />
               ))}
-            </div>
+            </div>}
           </div>
         );
       })}
-      <div className="flex gap-4 text-xs text-muted-foreground">
+    </div>
+      <div className="mt-4 flex gap-4 text-xs text-muted-foreground">
         {(Object.keys(STATUS_LABELS) as Status[]).map((s) => (
           <span key={s} className="flex items-center gap-1.5">
             <span className={cn("size-2.5 rounded-[2px] ring-1 ring-foreground/20", SWATCH[s])} />

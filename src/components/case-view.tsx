@@ -13,6 +13,7 @@ import { StatusToggle } from "@/components/algs/status-toggle";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { fitAlg, isValidNotation } from "@/lib/cases";
+import { isLastSlotSet } from "@/lib/cfop-sets";
 import { countUnit, moveCount, type Notation } from "@/lib/notation";
 import { addCustom, allAlgs, entryFor, mainAlg, removeCustom, setMain, useProgress } from "@/lib/progress";
 import { EXAMPLE_ALG, HOLD, notationOf, PUZZLE_NAMES, SET_INFO, setLabel } from "@/lib/puzzles";
@@ -82,7 +83,7 @@ export function CaseView({ id }: { id: string }) {
               <h1 className="text-4xl font-extrabold leading-none tracking-tight sm:text-5xl">{alg.name}</h1>
               <p className="mt-2 text-muted-foreground">
                 {alg.group}
-                {alg.set === "F2L" && ", front-right slot"}
+                {isLastSlotSet(alg.set) && ", front-right slot"}
                 {entry.attempts > 0 && (
                   <>
                     . Drilled {entry.attempts} {entry.attempts === 1 ? "time" : "times"}
@@ -95,7 +96,7 @@ export function CaseView({ id }: { id: string }) {
                 )}
               </p>
             </div>
-            {alg.puzzle !== "3x3" && <p className="max-w-prose text-sm text-muted-foreground">{SET_INFO[alg.set].blurb}</p>}
+            <p className="max-w-prose text-sm text-muted-foreground">{SET_INFO[alg.set].blurb}</p>
             <StatusToggle id={alg.id} status={entry.status} size="default" className="max-w-md" />
           </header>
 
@@ -277,7 +278,7 @@ function AddCustom({ alg, existing }: { alg: Alg; existing: string[] }) {
     const fitted = fitAlg(alg, input);
     if (!fitted) {
       return setError(
-        `That doesn't solve ${alg.name}${alg.set === "F2L" ? " into the front-right slot" : ""}, ${alg.puzzle === "sq1" ? "or a slice turns while a corner blocks it" : `or it turns the whole ${alg.puzzle === "megaminx" ? "puzzle" : "cube"}`}. Try it on the practice setup above.`,
+        `That doesn't solve ${alg.name}${isLastSlotSet(alg.set) ? " into the front-right slot" : ""}, ${alg.puzzle === "sq1" ? "or a slice turns while a corner blocks it" : `or it turns the whole ${alg.puzzle === "megaminx" ? "puzzle" : "cube"}`}. Try it on the practice setup above.`,
       );
     }
     if (existing.includes(fitted)) return setError("That one is already in the list.");

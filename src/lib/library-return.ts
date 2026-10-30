@@ -9,7 +9,7 @@
 const KEY = "last-layer:library-return";
 const RESTORE = "last-layer:library-restore";
 
-type Spot = { url: string; y: number };
+type Spot = { url: string; y: number; count?: number };
 
 function read(): Spot | null {
   try {
@@ -23,11 +23,27 @@ function read(): Spot | null {
 /** Remember the Library's current URL and scroll position. */
 export function saveLibrarySpot() {
   try {
-    const spot: Spot = { url: `${window.location.pathname}${window.location.search}`, y: window.scrollY };
+    const url = `${window.location.pathname}${window.location.search}`;
+    const previous = read();
+    const spot: Spot = { url, y: window.scrollY, count: previous?.url === url ? previous.count : undefined };
     sessionStorage.setItem(KEY, JSON.stringify(spot));
   } catch {
     // Storage blocked: Back to library just opens the plain Library.
   }
+}
+
+/** Restore enough cards before returning to a saved scroll position. */
+export function libraryPageCount(): number {
+  const spot = read();
+  const count = spot?.url === `${window.location.pathname}${window.location.search}` ? spot.count : undefined;
+  return typeof count === "number" && Number.isFinite(count) && count >= 60 ? count : 60;
+}
+
+export function saveLibraryPageCount(count: number) {
+  saveLibrarySpot();
+  const spot = read();
+  if (!spot) return;
+  try { sessionStorage.setItem(KEY, JSON.stringify({ ...spot, count })); } catch {}
 }
 
 /**

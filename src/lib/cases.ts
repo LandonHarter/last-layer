@@ -1,4 +1,5 @@
-import { applyAlg, f2lSolved, isSolved, keepsOrientation, solvedCube, topOriented, type Sticker } from "./cube";
+import { applyAlg, colorOf, f2lSolved, isSolved, keepsOrientation, solvedCube, topCornersSolved, topEdgesOriented, topOriented, type Sticker } from "./cube";
+import { CFOP_SETS, isCfopSet } from "./cfop-sets";
 import {
   megaApply,
   megaEdgesPlaced,
@@ -103,6 +104,15 @@ export function engineFor(c: Pick<CaseLike, "set" | "group">): Engine {
   let engine = engines.get(key);
   if (engine) return engine;
   const n = CUBE_SIZE[puzzleOf(c.set)] ?? 0;
+  if (isCfopSet(c.set)) {
+    const goal = CFOP_SETS[c.set].goal;
+    engine = goal === "solved" ? { ...cube3(isSolved, AUFS), endsSolved: true }
+      : goal === "corners" ? cube3((s) => f2lSolved(s) && topOriented(s) && topCornersSolved(s), AUFS)
+      : goal === "edges" ? cube3((s) => f2lSolved(s) && topEdgesOriented(s), [""])
+      : cube3((s) => f2lSolved(s) && topOriented(s), [""]);
+    engines.set(key, engine);
+    return engine;
+  }
   switch (c.set) {
     case "F2L":
       engine = cube3(f2lSolved, [""]);
@@ -111,7 +121,7 @@ export function engineFor(c: Pick<CaseLike, "set" | "group">): Engine {
       engine = cube3((s) => f2lSolved(s) && topOriented(s), [""]);
       break;
     case "PLL":
-      engine = cube3(isSolved, AUFS);
+      engine = { ...cube3(isSolved, AUFS), endsSolved: true };
       break;
     case "2x2-OLL":
       // Ortega: top and bottom one colour each; the layers can be out of order.
@@ -180,6 +190,32 @@ export function caseState(c: CaseLike, reference: string = c.algs[0]): unknown {
 /** 3x3 only: the case's state as stickers, for the sticker-level checks in tests. */
 export function caseStickers(reference: string): Sticker[] {
   return applyAlg(solvedCube(), invertAlg(reference));
+}
+
+/** Canonical 3x3 recognition key, ignoring pieces the step deliberately leaves unsolved.
+ * Both starting AUF and ending AUF are included, so symmetric cases collapse too.
+ */
+export function cubeCaseKey(c: CaseLike): string {
+  const engine = engineFor(c);
+  const home = solvedCube();
+  const goal = isCfopSet(c.set) ? CFOP_SETS[c.set].goal : c.set === "PLL" ? "solved" : c.set === "F2L" ? "pair" : "orientation";
+  const undo = invertAlg(c.algs[0]);
+  const keys: string[] = [];
+  for (const after of engine.after) for (const before of engine.before) {
+    const state = applyAlg(solvedCube(), `${after} ${undo} ${before}`);
+    const slots = state.map((s) => {
+      const origin = home[s.id];
+      const corner = origin.pos.every((v) => v !== 0);
+      const pair = origin.pos[0] === 1 && origin.pos[2] === 1 && origin.pos[1] < 1;
+      const color = colorOf(s);
+      const value = goal === "solved" || (goal === "corners" && corner) || pair ? color
+        : goal === "pair" ? "_"
+        : color === "U" && (goal === "orientation" || !corner) ? "U" : "_";
+      return `${s.pos.join(",")}/${s.normal.join(",")}:${value}`;
+    }).sort();
+    keys.push(slots.join("|"));
+  }
+  return keys.sort()[0];
 }
 
 /**

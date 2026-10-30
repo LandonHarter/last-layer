@@ -4,6 +4,12 @@ export type Tool = { href: string; name: string; description: string; Icon: Luci
 
 export const TOOLS: Tool[] = [
   {
+    href: "/drill/f2l",
+    name: "F2L solution lab",
+    description: "Find efficient solutions in every slot, check your moves and compare verified alternatives. Weak spots return sooner.",
+    Icon: FootprintsIcon,
+  },
+  {
     href: "/tools/blind",
     name: "Blindfolded memo",
     description: "Turn a scramble into edge and corner letters with your own scheme, buffers and orientation. Quiz yourself on it.",

@@ -1,4 +1,5 @@
 import type { Notation } from "./notation";
+import { CFOP_SETS, type CfopSet } from "./cfop-sets";
 
 /** Every puzzle with algorithms in the app. */
 export type Puzzle = "2x2" | "3x3" | "4x4" | "5x5" | "6x6" | "7x7" | "megaminx" | "sq1";
@@ -20,6 +21,7 @@ export const PUZZLE_NAMES: Record<Puzzle, string> = {
 export const CUBE_SIZE: Partial<Record<Puzzle, number>> = { "2x2": 2, "3x3": 3, "4x4": 4, "5x5": 5, "6x6": 6, "7x7": 7 };
 
 export type AlgSet =
+  | CfopSet
   | "F2L"
   | "OLL"
   | "PLL"
@@ -50,10 +52,13 @@ type SetInfo = {
   blurb: string;
 };
 
+const cfopInfo: [CfopSet, SetInfo][] = Object.entries(CFOP_SETS).map(([set, info]) => [set as CfopSet, { ...info, puzzle: "3x3" }]);
+
 export const SET_INFO: Record<AlgSet, SetInfo> = {
   F2L: { puzzle: "3x3", label: "F2L", title: "First two layers", blurb: "Pair a corner and edge into the front-right slot." },
   OLL: { puzzle: "3x3", label: "OLL", title: "Orient the last layer", blurb: "Make the top all yellow." },
   PLL: { puzzle: "3x3", label: "PLL", title: "Permute the last layer", blurb: "Move the top pieces into place." },
+  ...Object.fromEntries(cfopInfo) as Record<CfopSet, SetInfo>,
   "2x2-OLL": {
     puzzle: "2x2",
     label: "OLL",
@@ -142,7 +147,7 @@ export const EXAMPLE_ALG: Record<Puzzle, string> = {
 /** The Library headline for each puzzle. */
 export const HEADLINES: Record<Puzzle, string> = {
   "2x2": "Ortega for the 2x2: every OLL and PBL case",
-  "3x3": "Every F2L, OLL and PLL case, one place to learn them",
+  "3x3": "From F2L to ZBLL, one place to learn CFOP",
   "4x4": "4x4 parity: every case a 3x3 can't have",
   "5x5": "5x5 last edges and edge parity",
   "6x6": "6x6 parity, for both rings of wings",

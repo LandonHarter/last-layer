@@ -1,5 +1,6 @@
 import { ALGS, type Alg } from "@/data/algs";
 import { engineFor, setupWorks } from "./cases";
+import { CFOP_SETS, isCfopSet } from "./cfop-sets";
 import { megaWithoutRotations } from "./megaminx";
 import { faceTurnsOnly, invertAlg, moveCount, parseAlg, simplifyAlg, withoutRotations } from "./notation";
 import { CUBE_SIZE, setsOf, type AlgSet } from "./puzzles";
@@ -8,7 +9,12 @@ type Random = () => number;
 
 const pick = <T>(list: readonly T[], random: Random): T => list[Math.floor(random() * list.length)];
 
-const bank = (set: AlgSet) => ALGS.filter((a) => a.set === set).flatMap((a) => a.algs);
+const banks = new Map<AlgSet, string[]>();
+const bank = (set: AlgSet) => {
+  if (!banks.has(set)) banks.set(set, ALGS.filter((a) => a.set === set).flatMap((a) => a.algs));
+  return banks.get(set)!;
+};
+const epll = ALGS.filter((a) => ["pll-ua", "pll-ub", "pll-h", "pll-z"].includes(a.id)).flatMap((a) => a.algs);
 
 /** Undoing an alternative, not the one you drill with, so the setup doesn't spell out the answer. */
 function otherAlg(target: Alg, main: string, random: Random): string {
@@ -31,7 +37,7 @@ const faceOnly = (alg: string) => parseAlg(alg).every((m) => /^[RLUDFB]$/.test(m
 function endsSolved(target: Alg): boolean {
   const sets = setsOf(target.puzzle);
   const engine = engineFor(target);
-  return engine.endsSolved || (engine.after.length > 1 && sets.indexOf(target.set) === sets.length - 1);
+  return !!engine.endsSolved || (target.puzzle !== "3x3" && engine.after.length > 1 && sets.indexOf(target.set) === sets.length - 1);
 }
 
 /**
@@ -42,6 +48,14 @@ function endsSolved(target: Alg): boolean {
 function noiseFor(target: Alg): string[] {
   if (target.set === "F2L") return [...bank("OLL"), ...bank("PLL")];
   if (target.set === "OLL") return bank("PLL");
+  if (isCfopSet(target.set)) {
+    switch (CFOP_SETS[target.set].goal) {
+      case "corners": return epll;
+      case "orientation": return bank("PLL");
+      case "edges": return [...bank("OLL"), ...bank("PLL")];
+      case "solved": return [];
+    }
+  }
   const sets = setsOf(target.puzzle);
   const later = sets.slice(sets.indexOf(target.set) + 1).flatMap(bank);
   if (target.puzzle === "3x3" || target.puzzle === "2x2" || target.puzzle === "megaminx" || target.puzzle === "sq1") return later;

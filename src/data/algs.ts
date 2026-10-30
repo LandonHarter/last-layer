@@ -1,6 +1,7 @@
 import { ALL_SETS, PUZZLE_NAMES, PUZZLES, SET_INFO, setsOf, type AlgSet, type Puzzle } from "@/lib/puzzles";
 import { PUZZLE_ALGS } from "./puzzle-algs";
 import { SQ1_ALGS } from "./sq1-algs";
+import { CFOP_ALGS } from "./cfop-algs";
 
 export type { AlgSet, Puzzle };
 
@@ -1222,7 +1223,7 @@ export const ALGS: Alg[] = [
     group,
     algs,
   })),
-  ...[...PUZZLE_ALGS, ...SQ1_ALGS].map((a) => ({ ...a, puzzle: SET_INFO[a.set].puzzle })),
+  ...[...CFOP_ALGS, ...PUZZLE_ALGS, ...SQ1_ALGS].map((a) => ({ ...a, puzzle: SET_INFO[a.set].puzzle })),
 ];
 
 export const ALGS_BY_ID = new Map(ALGS.map((a) => [a.id, a]));

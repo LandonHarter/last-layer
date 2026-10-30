@@ -7,6 +7,8 @@
  */
 import type { Alg } from "../src/data/algs";
 import { caseState, engineFor } from "../src/lib/cases";
+import { CFOP_SETS, isCfopSet, isLastSlotSet } from "../src/lib/cfop-sets";
+import { colorOf, solvedCube, stickerAt, type Sticker as CubeSticker, type Vec } from "../src/lib/cube";
 import { megaAround, megaApply, megaIdentity, megaSlot, MEGA_FACES, type MegaFace } from "../src/lib/megaminx";
 import { applyMoves, FACES, identityState, slot, solvedState, type Face } from "../src/lib/nxn";
 import { CUBE_SIZE } from "../src/lib/puzzles";
@@ -117,7 +119,7 @@ function cubePlan(
   // Which original slot each viewed slot shows, to place arrows.
   const slots = view ? applyMoves(identityState(n), view, n) : identityState(n);
   const u = FACES.indexOf("U");
-  const fill = (c: number) => (mask === "full" || c === u ? CUBE_COLORS[FACES[c]] : MASK);
+  const fill = (c: number) => (c < FACES.length && (mask === "full" || c === u) ? CUBE_COLORS[FACES[c]] : MASK);
   const cell = 1 / n;
   const X = (x: number) => ox + (mirror ? -x : x) * scale;
   const Y = (y: number) => y * scale;
@@ -194,6 +196,68 @@ function cubeCase(alg: Alg): string {
   const view = touchesTop(n, state) ? "" : "x";
   const plan = cubePlan(n, state, ids, { mask, view, arrows: solvesToSolved && !view });
   return svg("-0.9 -0.9 1.8 1.8", plan.body);
+}
+
+/** Advanced 3x3 cases: mask only what that specific step ignores. */
+function cfopCase(alg: Alg): string {
+  if (!isCfopSet(alg.set)) throw new Error("Expected CFOP extension");
+  const state = caseState(alg) as CubeSticker[];
+  const home = solvedCube();
+  const goal = CFOP_SETS[alg.set].goal;
+  const lastSlot = isLastSlotSet(alg.set);
+  const fill = (s: CubeSticker) => {
+    const origin = home[s.id];
+    const corner = origin.pos.every(Boolean);
+    const pair = origin.pos[0] === 1 && origin.pos[2] === 1 && origin.pos[1] < 1;
+    const centre = s.pos.filter(Boolean).length === 1;
+    const c = colorOf(s);
+    const relevant = centre || (lastSlot && pair) || goal === "solved" || (goal === "corners" && corner)
+      || (c === "U" && (goal === "orientation" || !corner));
+    return relevant ? CUBE_COLORS[c] : MASK;
+  };
+  if (!lastSlot) {
+    // Convert sticker positions to the n-cube's face order for the existing plan renderer.
+    const colors = new Uint8Array(54);
+    for (const face of FACES) for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
+      const a = c - 1;
+      const b = r - 1;
+      const pos: Vec = face === "U" ? [a, 1, b] : face === "D" ? [a, -1, -b]
+        : face === "F" ? [a, -b, 1] : face === "B" ? [-a, -b, -1]
+        : face === "R" ? [1, -b, -a] : [-1, -b, a];
+      const normal: Vec = face === "U" ? [0, 1, 0] : face === "D" ? [0, -1, 0]
+        : face === "F" ? [0, 0, 1] : face === "B" ? [0, 0, -1]
+        : face === "R" ? [1, 0, 0] : [-1, 0, 0];
+      const s = stickerAt(state, pos, normal);
+      colors[slot(3, face, r, c)] = fill(s) === MASK ? 6 : FACES.indexOf(colorOf(s));
+    }
+    const ids = applyMoves(identityState(3), alg.algs[0], 3);
+    return svg("-0.9 -0.9 1.8 1.8", cubePlan(3, colors, ids, { mask: "full", arrows: alg.group === "PLL" }).body);
+  }
+  // Isometric U/F/R view exposes the FR slot. Elevated B/L strips expose the
+  // otherwise hidden last-layer stickers, so corner-twist cases stay distinct.
+  const project = ([x, y, z]: Vec): Pt => [(x - z) * 0.32, -y * 0.4 + (x + z) * 0.16 + 0.1];
+  const body: string[] = [];
+  for (const s of state) {
+    if (s.normal[1] !== 1 && s.normal[0] !== 1 && s.normal[2] !== 1) continue;
+    const axis = s.normal.findIndex(Boolean);
+    const others = [0, 1, 2].filter((i) => i !== axis);
+    const pts = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, b]) => {
+      const p = s.pos.map((v, i) => i === axis ? v : v * 2 / 3) as Vec;
+      p[others[0]] += a / 3;
+      p[others[1]] += b / 3;
+      return project(p);
+    });
+    body.push(poly({ points: inset(pts, 0.07), fill: fill(s) }));
+  }
+  for (const face of ["B", "L"] as const) for (let c = 0; c < 3; c++) {
+    const s = stickerAt(state, face === "B" ? [1 - c, 1, -1] : [-1, 1, c - 1], face === "B" ? [0, 0, -1] : [-1, 0, 0]);
+    const a = -1 + c * 2 / 3;
+    const b = a + 2 / 3;
+    const pts: Vec[] = face === "B" ? [[-a, 1.1, -1], [-b, 1.1, -1], [-b, 1.36, -1], [-a, 1.36, -1]]
+      : [[-1, 1.1, a], [-1, 1.1, b], [-1, 1.36, b], [-1, 1.36, a]];
+    body.push(poly({ points: inset(pts.map(project), 0.08), fill: fill(s) }));
+  }
+  return svg("-0.9 -0.9 1.8 1.8", body);
 }
 
 /** PBL: arrows for the bottom corners, placed on the bottom panel. */
@@ -357,9 +421,9 @@ function sq1Case(alg: Alg): string {
   return svg("-0.9 -0.9 1.8 1.8", body);
 }
 
-/** The SVG for a case, or null for the 3x3 (VisualCube draws those). */
+/** The SVG for a case; the original 3x3 F2L/OLL/PLL keep their VisualCube images. */
 export function caseSvg(alg: Alg): string | null {
-  if (alg.puzzle === "3x3") return null;
+  if (alg.puzzle === "3x3") return isCfopSet(alg.set) ? cfopCase(alg) : null;
   if (alg.puzzle === "megaminx") return megaCase(alg);
   if (alg.puzzle === "sq1") return sq1Case(alg);
   return cubeCase(alg);

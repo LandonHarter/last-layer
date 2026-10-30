@@ -140,6 +140,36 @@ export function topOriented(state: Sticker[]): boolean {
   return state.filter((s) => s.normal[1] === 1).every((s) => colorOf(s) === "U");
 }
 
+/** The cross and the three F2L slots other than front-right stay solved. */
+export function otherSlotsSolved(state: Sticker[]): boolean {
+  return state.filter((s) => s.pos[1] < 1 && !(s.pos[0] === 1 && s.pos[2] === 1))
+    .every((s) => colorOf(s) === faceOf(s.normal));
+}
+
+export function topEdgesOriented(state: Sticker[]): boolean {
+  return state.filter((s) => s.normal[1] === 1 && Math.abs(s.pos[0]) + Math.abs(s.pos[2]) === 1)
+    .every((s) => colorOf(s) === "U");
+}
+
+/** Standard cubie EO (R/U/L/D turns preserve it), including a pair still in U. */
+export function edgesOriented(state: Sticker[]): boolean {
+  const edges = state.filter((s) => s.pos.filter(Boolean).length === 2);
+  for (const s of edges) {
+    const c = colorOf(s);
+    const piece = edges.filter((p) => eq(p.pos, s.pos));
+    const hasUD = piece.some((p) => colorOf(p) === "U" || colorOf(p) === "D");
+    if (hasUD ? c !== "U" && c !== "D" : c !== "F" && c !== "B") continue;
+    if (s.pos[1] !== 0 ? s.normal[1] === 0 : s.normal[2] === 0) return false;
+  }
+  return true;
+}
+
+/** Corners in their exact home positions; the engine supplies the final AUF. */
+export function topCornersSolved(state: Sticker[]): boolean {
+  return state.filter((s) => s.pos[1] === 1 && s.pos[0] !== 0 && s.pos[2] !== 0)
+    .every((s) => colorOf(s) === faceOf(s.normal));
+}
+
 /** Index 0–8 of a U-face sticker, row-major from back-left (VisualCube order). */
 export function uIndex(pos: Vec): number {
   return (pos[2] + 1) * 3 + (pos[0] + 1);

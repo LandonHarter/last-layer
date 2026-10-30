@@ -49,7 +49,7 @@ const groupsOf = (set: AlgSet, why: (group: string) => string): Cluster[] => byG
 
 // Cases that belong together, easiest first. Batches never mix two clusters
 // unless both fit whole.
-const CLUSTERS: Record<AlgSet, Cluster[]> = {
+const CLUSTERS: Partial<Record<AlgSet, Cluster[]>> = {
   "2x2-OLL": [
     { ids: ["2x2-oll-sune", "2x2-oll-antisune"], why: "Sune and Antisune: the same triggers, and the ones you'll see most" },
     { ids: ["2x2-oll-u", "2x2-oll-t", "2x2-oll-l"], why: "Two corners oriented: tell them apart by where the yellow stickers point" },
@@ -117,6 +117,8 @@ const CLUSTERS: Record<AlgSet, Cluster[]> = {
   ),
 };
 
+const clustersOf = (set: AlgSet) => CLUSTERS[set] ?? groupsOf(set, (group) => `${group}: learn the recognition patterns side by side`);
+
 export type Batch = { ids: string[]; why: string[] };
 
 /** Split a list into `parts` runs of near-equal length, in order. */
@@ -139,7 +141,7 @@ function evenSplit<T>(list: T[], parts: number): T[][] {
 export function planBatches(set: AlgSet, size: number, skip: (id: string) => boolean = () => false): Batch[] {
   const batches: Batch[] = [];
   let current: Batch = { ids: [], why: [] };
-  for (const cluster of CLUSTERS[set]) {
+  for (const cluster of clustersOf(set)) {
     const ids = cluster.ids.filter((id) => !skip(id));
     if (!ids.length) continue;
     for (const piece of evenSplit(ids, Math.ceil(ids.length / size))) {
@@ -156,7 +158,7 @@ export function planBatches(set: AlgSet, size: number, skip: (id: string) => boo
 }
 
 /** Every case appears in the plan exactly once. */
-export const planCases = (set: AlgSet): Alg[] => CLUSTERS[set].flatMap((c) => c.ids.map((id) => ALGS_BY_ID.get(id)!));
+export const planCases = (set: AlgSet): Alg[] => clustersOf(set).flatMap((c) => c.ids.map((id) => ALGS_BY_ID.get(id)!));
 
 // ---------------------------------------------------------------------------
 // What to do next in a batch

@@ -71,6 +71,7 @@ export function SiteHeader() {
               key={id}
               type="button"
               role="radio"
+              aria-label={label}
               aria-checked={mode === id}
               onClick={() => choose(id)}
               className={cn(
@@ -79,7 +80,7 @@ export function SiteHeader() {
               )}
             >
               <Icon className="size-4" aria-hidden="true" />
-              {label}
+              <span className="hidden min-[380px]:inline">{label}</span>
             </button>
           ))}
         </div>

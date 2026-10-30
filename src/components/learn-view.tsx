@@ -6,6 +6,7 @@ import { ArrowRightIcon, CheckIcon, EyeIcon, LightbulbIcon, RefreshCwIcon, Rotat
 import { toast } from "sonner";
 import { ALGS, ALGS_BY_ID, type Alg, type AlgSet } from "@/data/algs";
 import { PuzzleSelect } from "@/components/puzzle-select";
+import { SetSelect } from "@/components/set-select";
 import { CaseImage } from "@/components/algs/case-image";
 import { MoveSequence } from "@/components/algs/move-sequence";
 import { NotesField } from "@/components/algs/notes-field";
@@ -90,7 +91,7 @@ export function LearnView() {
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <PuzzleSelect value={puzzle} onChange={(p: Puzzle) => choosePuzzle(p)} />
-          <ToggleGroup
+          {setsOf(puzzle).length > 6 ? <SetSelect puzzle={puzzle} value={set} onChange={(v) => v !== "all" && updateLearn((d) => ({ ...d, set: v }))} /> : <ToggleGroup
             value={[set]}
             onValueChange={(v) => v[0] && updateLearn((d) => ({ ...d, set: v[0] as AlgSet }))}
             variant="outline"
@@ -102,7 +103,7 @@ export function LearnView() {
                 {setLabel(s)}
               </ToggleGroupItem>
             ))}
-          </ToggleGroup>
+          </ToggleGroup>}
         </div>
         <div className="flex items-center gap-3">
           <span id="size-label" className="text-sm text-muted-foreground">

@@ -1,0 +1,30 @@
+<?xml version='1.0' standalone='no'?>
+<svg version='1.1' xmlns='http://www.w3.org/2000/svg' width='240' height='240' viewBox='-0.9 -0.9 1.8 1.8'>
+<polygon fill='#000000' points='-0.52,-0.52 0.52,-0.52 0.52,0.52 -0.52,0.52'/>
+<polygon fill='#FEFE00' stroke='#000000' stroke-width='0.012' stroke-linejoin='round' points='-0.4833,-0.4833 -0.1833,-0.4833 -0.1833,-0.1833 -0.4833,-0.1833'/>
+<polygon fill='#FEFE00' stroke='#000000' stroke-width='0.012' stroke-linejoin='round' points='-0.15,-0.4833 0.15,-0.4833 0.15,-0.1833 -0.15,-0.1833'/>
+<polygon fill='#FEFE00' stroke='#000000' stroke-width='0.012' stroke-linejoin='round' points='0.1833,-0.4833 0.4833,-0.4833 0.4833,-0.1833 0.1833,-0.1833'/>
+<polygon fill='#FEFE00' stroke='#000000' stroke-width='0.012' stroke-linejoin='round' points='-0.4833,-0.15 -0.1833,-0.15 -0.1833,0.15 -0.4833,0.15'/>
+<polygon fill='#FEFE00' stroke='#000000' stroke-width='0.012' stroke-linejoin='round' points='-0.15,-0.15 0.15,-0.15 0.15,0.15 -0.15,0.15'/>
+<polygon fill='#FEFE00' stroke='#000000' stroke-width='0.012' stroke-linejoin='round' points='0.1833,-0.15 0.4833,-0.15 0.4833,0.15 0.1833,0.15'/>
+<polygon fill='#FEFE00' stroke='#000000' stroke-width='0.012' stroke-linejoin='round' points='-0.4833,0.1833 -0.1833,0.1833 -0.1833,0.4833 -0.4833,0.4833'/>
+<polygon fill='#FEFE00' stroke='#000000' stroke-width='0.012' stroke-linejoin='round' points='-0.15,0.1833 0.15,0.1833 0.15,0.4833 -0.15,0.4833'/>
+<polygon fill='#FEFE00' stroke='#000000' stroke-width='0.012' stroke-linejoin='round' points='0.1833,0.1833 0.4833,0.1833 0.4833,0.4833 0.1833,0.4833'/>
+<polygon fill='#00D800' stroke='#000000' stroke-width='0.012' stroke-linejoin='round' points='-0.48,0.5472 -0.1867,0.5472 -0.1867,0.6528 -0.48,0.6528'/>
+<polygon fill='#EE0000' stroke='#000000' stroke-width='0.012' stroke-linejoin='round' points='0.1867,-0.6528 0.48,-0.6528 0.48,-0.5472 0.1867,-0.5472'/>
+<polygon fill='#0000F2' stroke='#000000' stroke-width='0.012' stroke-linejoin='round' points='0.5472,0.48 0.6528,0.48 0.6528,0.1867 0.5472,0.1867'/>
+<polygon fill='#FFA100' stroke='#000000' stroke-width='0.012' stroke-linejoin='round' points='-0.6528,-0.48 -0.5472,-0.48 -0.5472,-0.1867 -0.6528,-0.1867'/>
+<polygon fill='#EE0000' stroke='#000000' stroke-width='0.012' stroke-linejoin='round' points='-0.1467,0.5472 0.1467,0.5472 0.1467,0.6528 -0.1467,0.6528'/>
+<polygon fill='#00D800' stroke='#000000' stroke-width='0.012' stroke-linejoin='round' points='-0.1467,-0.6528 0.1467,-0.6528 0.1467,-0.5472 -0.1467,-0.5472'/>
+<polygon fill='#FFA100' stroke='#000000' stroke-width='0.012' stroke-linejoin='round' points='0.5472,0.1467 0.6528,0.1467 0.6528,-0.1467 0.5472,-0.1467'/>
+<polygon fill='#0000F2' stroke='#000000' stroke-width='0.012' stroke-linejoin='round' points='-0.6528,-0.1467 -0.5472,-0.1467 -0.5472,0.1467 -0.6528,0.1467'/>
+<polygon fill='#EE0000' stroke='#000000' stroke-width='0.012' stroke-linejoin='round' points='0.1867,0.5472 0.48,0.5472 0.48,0.6528 0.1867,0.6528'/>
+<polygon fill='#0000F2' stroke='#000000' stroke-width='0.012' stroke-linejoin='round' points='-0.48,-0.6528 -0.1867,-0.6528 -0.1867,-0.5472 -0.48,-0.5472'/>
+<polygon fill='#00D800' stroke='#000000' stroke-width='0.012' stroke-linejoin='round' points='0.5472,-0.1867 0.6528,-0.1867 0.6528,-0.48 0.5472,-0.48'/>
+<polygon fill='#FFA100' stroke='#000000' stroke-width='0.012' stroke-linejoin='round' points='-0.6528,0.1867 -0.5472,0.1867 -0.5472,0.48 -0.6528,0.48'/>
+<line x1='0.3333' y1='-0.1933' x2='0.3333' y2='0.1933' stroke='#333333' stroke-width='0.028' stroke-linecap='round'/><polygon fill='#333333' points='0.3333,0.2433 0.2948,0.1733 0.3718,0.1733'/><polygon fill='#333333' points='0.3333,-0.2433 0.2948,-0.1733 0.3718,-0.1733'/>
+<line x1='0' y1='-0.2433' x2='0' y2='0.1933' stroke='#333333' stroke-width='0.028' stroke-linecap='round'/><polygon fill='#333333' points='0,0.2433 -0.0385,0.1733 0.0385,0.1733'/>
+<line x1='0.0636' y1='0.2697' x2='0.2343' y2='0.099' stroke='#333333' stroke-width='0.028' stroke-linecap='round'/><polygon fill='#333333' points='0.2697,0.0636 0.2474,0.1404 0.193,0.0859'/>
+<line x1='-0.2697' y1='-0.0636' x2='-0.099' y2='-0.2343' stroke='#333333' stroke-width='0.028' stroke-linecap='round'/><polygon fill='#333333' points='-0.0636,-0.2697 -0.0859,-0.193 -0.1404,-0.2474'/>
+<line x1='0.2433' y1='0' x2='-0.1933' y2='0' stroke='#333333' stroke-width='0.028' stroke-linecap='round'/><polygon fill='#333333' points='-0.2433,0 -0.1733,-0.0385 -0.1733,0.0385'/>
+</svg>

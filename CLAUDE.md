@@ -2,6 +2,8 @@
 
 A trainer for memorizing Rubik's cube F2L (41), OLL (57) and PLL (21) algorithms, plus 2x2 Ortega (OLL, PBL), 4x4 to 7x7 parity and edge cases, the megaminx 4-look last layer (EO, CO, EP, CP) and the Square-1 (all 169 cubeshape cases, CO, EO, CP, EP, parity), a speedcubing timer, and a Tools page (blindfolded memo and quiz, fewest moves practice, a 3x3 solver, scramble sheets, an algorithm toolkit, an average calculator). Library, Learn and Drill share one puzzle choice (`last-layer:puzzle:v1`, `src/lib/puzzle-choice.ts`); each timer session has its own puzzle (2x2 to 7x7, megaminx, pyraminx, skewb, Square-1). Each case has several algorithms; you pick your main one or add your own. The header switches between Algorithms mode (Library, Learn, Drill) and Timer mode (Timer); Analyze charts and tests the data of either, and Tools sits in both. It is built with Next 16 (App Router), React 19, Tailwind 4, shadcn (base-nova / Base UI), bun, Prisma 7 (Postgres on Neon) and Better Auth (Google sign-in). Signed out, progress, solves and the drill log are kept in `localStorage`; signed in, they live in the database and localStorage is not touched (`src/lib/storage.ts`). A new account is offered to load a backup file or this browser's data. The header's backup button saves all of it to one file and loads it elsewhere (`src/lib/backup.ts`).
 
+3x3 also includes COLL (40), WV and SV (54 each, both insertion directions), ZBLL (493 including PLL), ZBLS (302), VHLS (32), VLS (216), and OLLCP (331). These CFOP extensions share the Library, Learn, Drill, progress and backup flows.
+
 UI design, tokens and themes are documented in [DESIGN.md](./DESIGN.md). Read it before changing any UI.
 
 ## Commands
@@ -11,12 +13,14 @@ UI design, tokens and themes are documented in [DESIGN.md](./DESIGN.md). Read it
 - `bun test`: run the tests (algorithm data is checked with a cube simulator, plus scheduler behaviour, stats and scrambles)
 - `bunx tsc --noEmit`: typecheck
 - `bun run db:migrate`: create and apply a migration after editing `prisma/schema.prisma` (`db:deploy` applies them in production; `postinstall` runs `prisma generate`)
-- `bun run fetch-images [--force]`: write case SVGs into `public/cases/` (3x3 from VisualCube, other puzzles drawn locally)
+- `bun run fetch-images [--force]`: write case SVGs into `public/cases/` (core 3x3 F2L/OLL/PLL from VisualCube; extensions and other puzzles drawn locally)
+- `bun scripts/import-cfop.ts [--verbose]`: rebuild checked-in CFOP extension data from a pinned MIT-licensed bank; source/license/counts in `src/data/cfop-sources.md`
 
 ## Layout
 
 - `src/data/algs.ts`: algorithm data (id, puzzle, set, name, group, algs). 3x3 ids look like `f2l-5`, `oll-21` or `pll-t`; other puzzles' cases live in `src/data/puzzle-algs.ts` (`2x2-pbl-adj-top`, `4x4-oll-parity`, `mega-co-5`) and `src/data/sq1-algs.ts` (`sq1-cs-kite-kite`, `sq1-ep-ua-solved`). `algs[0]` is the default main and the reference the case image and all checks use. F2L cases are for the front-right slot.
 - `src/lib/puzzles.ts`: puzzles, sets (`SET_INFO`: puzzle, label, title), notation per set, and per-puzzle copy (how to hold it, headlines)
+- `src/data/cfop-algs.json` + `cfop-algs.ts`: imported CFOP cases. `src/lib/cfop-sets.ts` declares their copy and step goals. Last-slot cases always target FR. Extension order is not a solve sequence: setup noise is chosen by goal, never by the next set in the list. `cubeCaseKey` canonicalizes recognition states across AUFs, masking irrelevant pieces.
 - `src/lib/nxn.ts`: colour-based simulator for any cube 2x2 to 7x7 (big-cube centres and wings look alike, so states compare by colour). `src/lib/megaminx.ts`: megaminx simulator and `megaWithoutRotations`
 - `src/lib/sq1.ts`: Square-1 simulator (12 slots per layer, the slice swaps top slot k with bottom slot 5-k; a slice blocked by a corner marks the state broken), its notation (`(1,0) / (-1,0)`, WCA style; `parseAlg(alg, "sq1")`, moves count slices), the checks for each step, drawing geometry (`sq1Layer`, `sq1Arrows`) and `shapeKey`. Solved, the cut is just left of the front edge, so `(1,0) /` and `(0,-1) /` keep the cube shape.
 - Big-cube notation: `Rw` and `r` turn two layers, `3Rw` three, `2R` and `3R` one inner slice. Megaminx: `R2` is two fifths clockwise, `R2'` two fifths back (`parseAlg(alg, "megaminx")`).
@@ -24,7 +28,7 @@ UI design, tokens and themes are documented in [DESIGN.md](./DESIGN.md). Read it
 - `src/lib/cases.ts`: `engineFor(case)` picks the simulator, the goal of the step and the turns allowed before and after (2x2 PBL also turns the bottom; big-cube OLL parity ends reduced, other big-cube cases end solved; Square-1 checks allow any turn of the layers at the end, and cubeshape cases any turn first). `fitAlg(case, alg)` checks whether an alg solves a case and adds the turn of the top it needs (used by the tests and for custom algs), `setupWorks`
 - `src/lib/setup.ts`: `makeSetup` builds drill setups that are not the inverse of your main: an alg from a later step plus an undone alternative (F2L, OLL, 2x2 OLL, megaminx EO to EP, big-cube OLL parity), or two other cases that combine into it (PLL, PBL, CP, other big-cube cases). 3x3 and 2x2 setups are face turns only (`faceTurnsOnly`); other puzzles have rotations taken out. Every setup is checked with the simulator.
 - `src/lib/cube.ts`: sticker-level 3x3 simulator, used by the tests and for PLL arrows
-- `scripts/case-svg.ts`: draws every non-3x3 case image from the simulators (VisualCube-style plan view, arrows for cases that end solved); a test checks the files in `public/cases/` match
+- `scripts/case-svg.ts`: draws CFOP extension and non-3x3 case images from the simulators (plan views, or isometric FR-slot views with hidden-side strips); masks only pieces ignored by the step. A test checks files in `public/cases/` match
 - `src/lib/progress.ts`: `useProgress()` store (`useSyncExternalStore` over localStorage key `last-layer:progress:v1`). An entry also holds `main` (chosen alg), `custom` (your own algs) and `notes` (shown as the Drill hint); read the main with `mainAlg()`.
 - `src/lib/store.ts`: `createStore(key, fallback)`, the storage + `useSyncExternalStore` pattern used by the stores below
 - `src/lib/storage.ts`: where stores keep values: localStorage signed out, the account signed in (loaded by the root layout, changes sent to `POST /api/data` after 500 ms). `src/lib/user-data.ts`: the shared sync diff (documents whole; solves and drill log as row changes) and input checks. `src/lib/user-data.server.ts`: load, apply and replace in Postgres. Env: `DATABASE_URL` (migrations), `DATABASE_URL_POOLED` (app), `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
@@ -41,6 +45,7 @@ UI design, tokens and themes are documented in [DESIGN.md](./DESIGN.md). Read it
 - `src/lib/learn.ts`: Learn mode (`last-layer:learn:v1`): suggested batches (`planBatches`), per-case stage (pick, study, recall) and streak, and `nextTask`, which only brings in a new case once the shaky ones have a clean recall
 - `src/lib/triggers.ts`: `chunkAlg` splits an alg into named triggers (Sune, sexy move, …) and short chunks; `describeAlg` and `memoryTips` (mirror/inverse relations, repeated triggers)
 - `src/lib/scheduler.ts`: weighted pick for drills (In progress weighs 6, Learned 1, and a miss streak boosts the weight)
+- `src/lib/f2l-trainer.ts`: F2L solution lab (`/drill/f2l`, `src/components/f2l/`): all-slot and mirrored exercises, independent target/cross/protected-slot goals, HTM/rotation feedback and simulator-verified best-known comparisons. Ending in a changed hold is allowed. `f2l-progress.ts` keeps first-attempt efficiency and best solutions per case/slot/mirror/U position in `last-layer:f2l-lab:v1`; settings use `last-layer:f2l-lab-settings:v1`. Both use the shared account/browser storage and backup flow. Three clean first attempts within target make a variant solid; retries save better solutions without adding mastery.
 - `src/lib/themes.ts`: theme list and sticker palettes for the picker
 - `src/app/timer`, `src/app/analyze`: timer and analysis pages (bodies in `src/components/timer/` and `src/components/analyze/`)
 - `src/app/algs/[id]`: case page (all algorithms, pick main, add your own, practice setup)

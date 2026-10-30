@@ -1,4 +1,5 @@
 import { ALGS, type Alg } from "@/data/algs";
+import { isLastSlotSet } from "./cfop-sets";
 import { fitAlg } from "./cases";
 import { countUnit, invertAlg, mirrorAlg, moveCount, splitMoves, tokens, type Notation } from "./notation";
 import { looksSq1 } from "./sq1";
@@ -154,7 +155,7 @@ export function relatives(target: Alg, mainOf: (a: Alg) => string): { alg: Alg; 
     const main = mainOf(other);
     const notation = notationOf(target.set);
     // F2L mirrors through the front-right edge so the slot stays put; everything else left for right.
-    if (fitAlg(target, mirrorAlg(main, target.set === "F2L" ? "FR" : "M", notation))) out.push({ alg: other, how: "mirror" });
+    if (fitAlg(target, mirrorAlg(main, isLastSlotSet(target.set) ? "FR" : "M", notation))) out.push({ alg: other, how: "mirror" });
     else if (fitAlg(target, invertAlg(main, notation))) out.push({ alg: other, how: "inverse" });
   }
   return out;
