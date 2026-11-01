@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { ALGS, ALGS_BY_ID, caseLabel, fullSetLabel, SETS } from "@/data/algs";
 import { GroupBarChart, HistogramChart, Legend, QQChart, TrendChart, type Fit, type GroupBar, type TrendLine } from "@/components/analyze/charts";
 import { DailySection } from "@/components/analyze/daily";
+import { PracticeSection } from "@/components/analyze/practice";
 import { SessionCompare } from "@/components/analyze/session-compare";
 import { ChancesTest, CompareTest, NormalityTest, Panel, TrendTest, type Sample } from "@/components/analyze/tests";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -198,6 +199,8 @@ function TimerAnalysis() {
     }
     return [...bySession.values()].flatMap((list) => inRange(list, range));
   }, [data.solves, oll, pll, range]);
+  // Time cubing follows the session filter only; with All sessions it adds every puzzle up.
+  const practiceSolves = useMemo(() => data.solves.filter((s) => session === "all" || s.session === session), [data.solves, session]);
   // Only offer cases you've tagged a solve with.
   const tagged = useMemo(() => {
     const used = (step: "oll" | "pll") => {
@@ -246,6 +249,7 @@ function TimerAnalysis() {
       {data.solves.some((s) => s.daily) && (
         <DailySection solves={data.solves} session={dailySession} sessionName={sessionName.get(dailySession) ?? "this session"} />
       )}
+      <PracticeSection solves={practiceSolves} sessionName={session === "all" ? "all sessions" : (sessionName.get(session) ?? "this session")} />
       {samples.length === 0 ? (
         <p className="text-base text-muted-foreground">Nothing in this range. Try All time or another session.</p>
       ) : (

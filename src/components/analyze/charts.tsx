@@ -422,7 +422,20 @@ const monthShort = new Intl.DateTimeFormat(undefined, { month: "short" });
  * One square per day, Monday at the top, the latest week on the right. Faster
  * days are darker (quartiles of the days shown).
  */
-export function CalendarHeatmap({ days, end, valueFormat, label }: { days: CalendarDay[]; end: number; valueFormat: (v: number) => string; label: string }) {
+export function CalendarHeatmap({
+  days,
+  end,
+  valueFormat,
+  label,
+  higher = "lighter",
+}: {
+  days: CalendarDay[];
+  end: number;
+  valueFormat: (v: number) => string;
+  label: string;
+  /** Times are darker when lower (faster); pass "darker" for amounts like time spent. */
+  higher?: "lighter" | "darker";
+}) {
   const [ref, width] = useWidth<HTMLDivElement>();
   const step = CELL + CELL_GAP;
   // As many weeks as fit, but no more than reach back to the first day (and at least 8).
@@ -446,12 +459,12 @@ export function CalendarHeatmap({ days, end, valueFormat, label }: { days: Calen
     return cells;
   }, [days, end, weeks]);
 
-  // Quartile cut points over the finished days in view; lower is faster, so darker.
+  // Quartile cut points over the finished days in view; lower is faster, so darker (unless `higher` is "darker").
   const cuts = useMemo(() => {
     const vals = grid.flatMap((c) => (c.day?.value != null && Number.isFinite(c.day.value) ? [c.day.value] : [])).sort((a, b) => a - b);
     return vals.length ? [0.25, 0.5, 0.75].map((q) => vals[Math.min(vals.length - 1, Math.floor(q * vals.length))]) : [];
   }, [grid]);
-  const level = (v: number) => 3 - cuts.filter((c) => v > c).length;
+  const level = (v: number) => (higher === "darker" ? cuts.filter((c) => v >= c).length : 3 - cuts.filter((c) => v > c).length);
 
   const filled = grid.filter((c) => c.day);
   const { index, setIndex, onKeyDown } = useKeyboardIndex(filled.length);
