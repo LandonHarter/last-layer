@@ -5,6 +5,8 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  // Better Auth's tables live in `auth`, the schema mybase's users service made; app data stays in `public`.
+  schemas  = ["auth", "public"]
 }
 
 // ---------------------------------------------------------------------------
@@ -27,6 +29,7 @@ model User {
   drillAttempts DrillAttempt[]
 
   @@map("user")
+  @@schema("auth")
 }
 
 model Session {
@@ -42,6 +45,7 @@ model Session {
 
   @@index([userId])
   @@map("session")
+  @@schema("auth")
 }
 
 model Account {
@@ -62,6 +66,7 @@ model Account {
 
   @@index([userId])
   @@map("account")
+  @@schema("auth")
 }
 
 model Verification {
@@ -74,6 +79,7 @@ model Verification {
 
   @@index([identifier])
   @@map("verification")
+  @@schema("auth")
 }
 
 // ---------------------------------------------------------------------------
@@ -91,6 +97,7 @@ model UserDoc {
 
   @@id([userId, key])
   @@map("user_doc")
+  @@schema("public")
 }
 
 model Solve {
@@ -114,6 +121,7 @@ model Solve {
   @@id([userId, id])
   @@index([userId, at])
   @@map("solve")
+  @@schema("public")
 }
 
 model DrillAttempt {
@@ -131,4 +139,5 @@ model DrillAttempt {
   /// Retrying a sync must not log an answer twice.
   @@unique([userId, at, caseId])
   @@map("drill_attempt")
+  @@schema("public")
 }

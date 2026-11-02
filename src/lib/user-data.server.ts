@@ -1,4 +1,5 @@
 import { prisma } from "./db";
+import { cache } from "./mybase";
 import { Prisma } from "@/generated/prisma/client";
 import type { DrillAttempt, Solve } from "./solves";
 import { DRILL_KEY, TIMER_KEY, cleanDrillAttempt, cleanList, cleanSolve, isDataKey, type SyncOps } from "./user-data";
@@ -8,8 +9,39 @@ const MAX_DOC_BYTES = 512 * 1024;
 
 export type LoadedData = { onboarded: boolean; data: Record<string, unknown> };
 
-/** Everything an account has, keyed the way the stores keep it in localStorage. */
+/** Loaded data is cached this long; every write drops it. */
+const CACHE_SECONDS = 10 * 60;
+/** Bigger values go straight to the database, so one account can't crowd the shared cache. */
+const MAX_CACHED_BYTES = 1024 * 1024;
+const cacheKey = (userId: string) => `data:${userId}`;
+
+/** Everything an account has, keyed the way the stores keep it in localStorage. Read through the cache. */
 export async function loadUserData(userId: string): Promise<LoadedData> {
+  try {
+    const hit = await cache.getJson<LoadedData>(cacheKey(userId));
+    if (hit) return hit;
+  } catch (e) {
+    console.warn("cache read failed", e);
+  }
+  const loaded = await loadFromDb(userId);
+  try {
+    if (JSON.stringify(loaded).length <= MAX_CACHED_BYTES) await cache.setJson(cacheKey(userId), loaded, { ex: CACHE_SECONDS });
+  } catch (e) {
+    console.warn("cache write failed", e);
+  }
+  return loaded;
+}
+
+/** Drop the cached copy after a write. */
+async function forget(userId: string) {
+  try {
+    await cache.del(cacheKey(userId));
+  } catch (e) {
+    console.warn("cache delete failed", e);
+  }
+}
+
+async function loadFromDb(userId: string): Promise<LoadedData> {
   const [user, docs, solves, drill] = await Promise.all([
     prisma.user.findUnique({ where: { id: userId }, select: { onboarded: true } }),
     prisma.userDoc.findMany({ where: { userId } }),
@@ -81,7 +113,10 @@ export async function applySync(userId: string, ops: SyncOps) {
     const append = cleanList(ops.drill.append, cleanDrillAttempt);
     if (append.length) writes.push(prisma.drillAttempt.createMany({ data: append.map((a) => drillRow(userId, a)), skipDuplicates: true }));
   }
-  if (writes.length) await prisma.$transaction(writes);
+  if (writes.length) {
+    await prisma.$transaction(writes);
+    await forget(userId);
+  }
 }
 
 /** Swap everything the account has for `data` (a backup's), and mark it onboarded. */
@@ -99,4 +134,5 @@ export async function replaceUserData(userId: string, data: Record<string, unkno
     prisma.drillAttempt.createMany({ data: drill.map((a) => drillRow(userId, a)), skipDuplicates: true }),
     prisma.user.update({ where: { id: userId }, data: { onboarded: true } }),
   ]);
+  await forget(userId);
 }
