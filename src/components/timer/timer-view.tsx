@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { dailyRuns, todayRun } from "@/lib/daily";
 import { cubeSize, scrambleFor, type TimerPuzzle } from "@/lib/scramble";
+import { useSolver } from "@/lib/use-solver";
 import type { StackmatPacket } from "@/lib/stackmat";
 import { useAudioInputs, useStackmat, type StackmatConnection } from "@/lib/use-stackmat";
 import {
@@ -76,7 +77,30 @@ export function TimerView() {
   // Kept with the puzzle it was made for: after a session switch, the old one must not be drawn as the new puzzle.
   const [scrambled, setScrambled] = useState({ puzzle, text: "" });
   const scramble = scrambled.puzzle === puzzle ? scrambled.text : "";
-  const newScramble = useCallback((p: TimerPuzzle) => setScrambled({ puzzle: p, text: scrambleFor(p) }), []);
+  const { sq1Scramble } = useSolver();
+  // Square-1 scrambles are random-state, made in the worker; the next one is made while this one is solved.
+  const nextSq1 = useRef<Promise<string> | null>(null);
+  const scrambleSeq = useRef(0);
+  const newScramble = useCallback(
+    (p: TimerPuzzle) => {
+      const seq = ++scrambleSeq.current;
+      if (p !== "sq1") return setScrambled({ puzzle: p, text: scrambleFor(p) });
+      setScrambled({ puzzle: p, text: "" });
+      const pending = nextSq1.current ?? sq1Scramble();
+      nextSq1.current = sq1Scramble();
+      nextSq1.current.catch(() => {});
+      pending
+        // A worker that stopped (a remount) takes its requests with it: ask the new one, then make it here.
+        .catch(() => {
+          nextSq1.current = null;
+          return sq1Scramble().catch(() => scrambleFor(p));
+        })
+        .then((text) => {
+          if (scrambleSeq.current === seq) setScrambled({ puzzle: p, text });
+        });
+    },
+    [sq1Scramble],
+  );
   const [lastId, setLastId] = useState<string | null>(null);
   const [inspectStart, setInspectStartState] = useState<number | null>(null);
 

@@ -16,7 +16,7 @@ const COUNTS = ["5", "12", "25", "50"];
 const TOGGLE_ITEM = "px-3 font-semibold aria-pressed:bg-foreground aria-pressed:text-background";
 
 export function ScramblesView() {
-  const { scramble: randomState } = useSolver();
+  const { scramble: randomState, sq1Scramble } = useSolver();
   const [puzzle, setPuzzle] = useState<TimerPuzzle>("3x3");
   const [count, setCount] = useState(5);
   const [showNets, setShowNets] = useState(true);
@@ -26,15 +26,18 @@ export function ScramblesView() {
   const make = useCallback(async () => {
     setMaking(true);
     try {
-      // 3x3 scrambles are random-state, like the WCA's; other puzzles are random moves.
-      const list = puzzle === "3x3" ? await Promise.all(Array.from({ length: count }, () => randomState())) : Array.from({ length: count }, () => scrambleFor(puzzle));
+      // 3x3 and Square-1 scrambles are random-state, like the WCA's, made in the worker; other puzzles are random moves.
+      const worker = puzzle === "3x3" ? randomState : puzzle === "sq1" ? sq1Scramble : null;
+      const list = worker ? await Promise.all(Array.from({ length: count }, () => worker())) : Array.from({ length: count }, () => scrambleFor(puzzle));
       setScrambles(list);
     } catch (e) {
+      // The page is going away (or remounting); its next request takes over.
+      if (e instanceof DOMException && e.name === "AbortError") return;
       toast(`Couldn't make scrambles: ${e instanceof Error ? e.message : e}`);
     } finally {
       setMaking(false);
     }
-  }, [puzzle, count, randomState]);
+  }, [puzzle, count, randomState, sq1Scramble]);
   useEffect(() => {
     make();
   }, [make]);

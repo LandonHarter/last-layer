@@ -1,6 +1,6 @@
 import { applyAlg, colorOf, solvedCube, stickerAt, type Face, type Sticker, type Vec } from "./cube";
 import { applyMoves, faceStickers, FACES as NXN_FACES, solvedState } from "./nxn";
-import { canSlice, sq1Apply, sq1Solved, wcaTurn } from "./sq1";
+import { sq1RandomStateScramble } from "./sq1-solver";
 
 const AXIS: Record<string, number> = { U: 0, D: 0, R: 1, L: 1, F: 2, B: 2 };
 const SUFFIXES = ["", "'", "2"];
@@ -95,31 +95,11 @@ function megaminxScramble(random: () => number): string {
 }
 
 /**
- * A random-move Square-1 scramble in WCA notation: before each slice, a turn
- * of the two layers drawn from those that let the slice turn. Twenty slices
- * mix the shape and pieces well.
+ * A random-state Square-1 scramble in WCA notation (`sq1-solver.ts`), about
+ * 13 slices. Building its tables takes about half a second, so pages get
+ * these from the solver worker; this is the same thing on the calling thread.
  */
-export function sq1Scramble(random: () => number = Math.random, slices = 20): string {
-  let state = sq1Solved();
-  const moves: string[] = [];
-  for (let i = 0; i < slices; i++) {
-    const options: string[] = [];
-    for (let a = -5; a <= 6; a++)
-      for (let b = -5; b <= 6; b++) {
-        // Turning nothing between two slices would undo the last one.
-        if (i > 0 && a === 0 && b === 0) continue;
-        if (canSlice(sq1Apply(state, `(${a},${b})`))) options.push(`(${a},${b})`);
-      }
-    const turn = pick(options, random);
-    state = sq1Apply(state, `${turn} /`);
-    moves.push(turn === "(0,0)" ? "/" : `${turn} /`);
-  }
-  // End with a turn of the layers, as WCA scrambles often do.
-  const a = wcaTurn(Math.floor(random() * 12));
-  const b = wcaTurn(Math.floor(random() * 12));
-  if (a || b) moves.push(`(${a},${b})`);
-  return moves.join(" ");
-}
+export const sq1Scramble = (random: () => number = Math.random) => sq1RandomStateScramble(random);
 
 export function scrambleFor(puzzle: TimerPuzzle, random: () => number = Math.random): string {
   const n = CUBE_N[puzzle];

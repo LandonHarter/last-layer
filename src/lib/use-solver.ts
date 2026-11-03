@@ -9,7 +9,8 @@ type Pending = Map<number, { resolve: (s: string) => void; reject: (e: Error) =>
 /**
  * The 3x3 two-phase solver in a web worker. `solve` takes any 3x3 alg (wide,
  * slice and rotation moves too) and returns face turns, at most 22 of them.
- * `scramble` gives a random-state scramble.
+ * `scramble` gives a random-state scramble, `sq1Scramble` a random-state
+ * Square-1 one.
  */
 export function useSolver() {
   const worker = useRef<Worker | null>(null);
@@ -32,6 +33,7 @@ export function useSolver() {
     return () => {
       w.terminate();
       worker.current = null;
+      for (const p of waiting.values()) p.reject(new DOMException("Solver stopped", "AbortError"));
       waiting.clear();
     };
   }, []);
@@ -49,5 +51,6 @@ export function useSolver() {
 
   const solve = useCallback((alg: string) => send({ type: "solve", moves: faceTurnsOnly(alg) } as Omit<SolverRequest, "id">), [send]);
   const scramble = useCallback(() => send({ type: "scramble" }), [send]);
-  return { solve, scramble, busy };
+  const sq1Scramble = useCallback(() => send({ type: "sq1-scramble" }), [send]);
+  return { solve, scramble, sq1Scramble, busy };
 }

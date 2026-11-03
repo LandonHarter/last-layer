@@ -6,7 +6,7 @@ export const metadata: Metadata = { title: "Scramble sheet | Last Layer" };
 
 export default function ScramblesPage() {
   return (
-    <ToolPage title="Scramble sheet" description="A numbered batch of scrambles for any puzzle. 3x3 scrambles are random-state, like the WCA's; copy or print the lot.">
+    <ToolPage title="Scramble sheet" description="A numbered batch of scrambles for any puzzle. 3x3 and Square-1 scrambles are random-state, like the WCA's; copy or print the lot.">
       <ScramblesView />
     </ToolPage>
   );
