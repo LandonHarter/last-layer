@@ -1,17 +1,12 @@
 import { ALGS, type Alg } from "@/data/algs";
 import { applyAlg, colorOf, faceOf, normalizeOrientation, solvedCube, type Sticker } from "./cube";
 import { countMoves } from "./fmc";
-import { faceTurnsOnly, formatAlg, invertAlg, mirrorAlg, parseAlg, simplifyAlg } from "./notation";
+import { F2L_SLOTS, f2lToSlot, SLOT_INFO, type F2LSlot } from "./f2l-slot";
+import { faceTurnsOnly, formatAlg, invertAlg, parseAlg, simplifyAlg } from "./notation";
+
+export { F2L_SLOTS, f2lToSlot, SLOT_INFO, type F2LSlot };
 
 export const F2L_CASES = ALGS.filter((c) => c.set === "F2L");
-export const F2L_SLOTS = ["FR", "FL", "BR", "BL"] as const;
-export type F2LSlot = (typeof F2L_SLOTS)[number];
-export const SLOT_INFO: Record<F2LSlot, { label: string; x: number; z: number; rotation: string }> = {
-  FR: { label: "Front-right", x: 1, z: 1, rotation: "" },
-  FL: { label: "Front-left", x: -1, z: 1, rotation: "y'" },
-  BR: { label: "Back-right", x: 1, z: -1, rotation: "y" },
-  BL: { label: "Back-left", x: -1, z: -1, rotation: "y2" },
-};
 export const F2L_AUFS = ["", "U", "U2", "U'"] as const;
 export type F2LVariant = { caseId: string; slot: F2LSlot; mirrored: boolean; auf: string };
 export type F2LExercise = F2LVariant & { setup: string; protectedSlots: F2LSlot[] };
@@ -27,13 +22,6 @@ const getCase = (id: string): Alg => {
   if (!c) throw new Error(`Unknown F2L case: ${id}`);
   return c;
 };
-
-/** Reflect within FR first, then relabel faces to move that slot around D. No physical rotation remains. */
-export function f2lToSlot(alg: string, slot: F2LSlot, mirrored = false): string {
-  const rotation = SLOT_INFO[slot].rotation;
-  const source = mirrored ? mirrorAlg(alg, "FR") : alg;
-  return faceTurnsOnly(`${rotation} ${source} ${invertAlg(rotation)}`);
-}
 
 export function f2lVariantKey(v: F2LVariant): string {
   return `${v.caseId}:${v.slot}:${v.mirrored ? "mirror" : "original"}:${v.auf || "none"}`;

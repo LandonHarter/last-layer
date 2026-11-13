@@ -2,6 +2,7 @@ import { ALL_SETS, PUZZLE_NAMES, PUZZLES, SET_INFO, setsOf, type AlgSet, type Pu
 import { PUZZLE_ALGS } from "./puzzle-algs";
 import { SQ1_ALGS } from "./sq1-algs";
 import { CFOP_ALGS } from "./cfop-algs";
+import { F2L_SLOTS, slotAlgs, slotCaseId, type F2LSlot } from "@/lib/f2l-slot";
 
 export type { AlgSet, Puzzle };
 
@@ -13,6 +14,10 @@ export type Alg = {
   group: string;
   /** Every known algorithm for the case. The first is the default main. */
   algs: string[];
+  /** F2L only: the slot the pair goes into. Front-right cases are the ones in `ALGS`. */
+  slot?: F2LSlot;
+  /** F2L slot cases: the id of the front-right case they are moved from. */
+  base?: string;
 };
 
 // Each list starts with the default algorithm (jperm.net / speedcubedb
@@ -1213,7 +1218,7 @@ const pll: [string, string, string[]][] = [
 ];
 
 export const ALGS: Alg[] = [
-  ...f2l.map(([n, group, algs]) => ({ id: `f2l-${n}`, puzzle: "3x3" as const, set: "F2L" as const, name: `F2L ${n}`, group, algs })),
+  ...f2l.map(([n, group, algs]) => ({ id: `f2l-${n}`, puzzle: "3x3" as const, set: "F2L" as const, name: `F2L ${n}`, group, algs, slot: "FR" as const })),
   ...oll.map(([n, group, algs]) => ({ id: `oll-${n}`, puzzle: "3x3" as const, set: "OLL" as const, name: `OLL ${n}`, group, algs })),
   ...pll.map(([n, group, algs]) => ({
     id: `pll-${n.toLowerCase()}`,
@@ -1226,7 +1231,29 @@ export const ALGS: Alg[] = [
   ...[...CFOP_ALGS, ...PUZZLE_ALGS, ...SQ1_ALGS].map((a) => ({ ...a, puzzle: SET_INFO[a.set].puzzle })),
 ];
 
-export const ALGS_BY_ID = new Map(ALGS.map((a) => [a.id, a]));
+/**
+ * Each F2L case in the other three slots, with its own status, main and notes.
+ * Not in `ALGS`, so the Library, Learn and setup banks still see 41 cases.
+ */
+export const F2L_SLOT_ALGS: Alg[] = ALGS.filter((a) => a.set === "F2L").flatMap((a) =>
+  F2L_SLOTS.filter((slot) => slot !== "FR").map((slot) => ({
+    ...a,
+    id: slotCaseId(a.id, slot),
+    name: `${a.name} ${slot}`,
+    algs: slotAlgs(a.algs, slot),
+    slot,
+    base: a.id,
+  })),
+);
+
+export const ALGS_BY_ID = new Map([...ALGS, ...F2L_SLOT_ALGS].map((a) => [a.id, a]));
+
+/** An F2L case in all four slots, front-right first; any other case alone. */
+export function slotSiblings(alg: Alg): Alg[] {
+  if (!alg.slot) return [alg];
+  const base = alg.base ?? alg.id;
+  return F2L_SLOTS.map((slot) => ALGS_BY_ID.get(slotCaseId(base, slot))!);
+}
 
 /** Every set, puzzle by puzzle. */
 export const SETS: AlgSet[] = PUZZLES.flatMap(setsOf);

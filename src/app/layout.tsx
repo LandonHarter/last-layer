@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque, JetBrains_Mono } from "next/font/google";
 import { ThemeProvider } from "next-themes";
-import { Analytics } from "@vercel/analytics/next";
 import { AccountProvider, type Account } from "@/components/account-provider";
 import { SiteHeader, TabBar } from "@/components/site-header";
 import { Toaster } from "@/components/ui/sonner";
@@ -58,7 +57,6 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
             </TooltipProvider>
           </AccountProvider>
         </ThemeProvider>
-        <Analytics />
       </body>
     </html>
   );

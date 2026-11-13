@@ -3,7 +3,7 @@
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { SearchIcon, XIcon } from "lucide-react";
-import { algsOf, GROUPS, SET_TITLES, type Alg, type AlgSet } from "@/data/algs";
+import { algsOf, F2L_SLOT_ALGS, GROUPS, SET_TITLES, slotSiblings, type Alg, type AlgSet } from "@/data/algs";
 import { AlgCard } from "@/components/algs/alg-card";
 import { PuzzleSelect } from "@/components/puzzle-select";
 import { SetSelect } from "@/components/set-select";
@@ -162,7 +162,8 @@ export function LibraryView({ initial = DEFAULT_FILTERS, syncUrl = false }: { in
   const visible = puzzleAlgs.filter(
     (a) =>
       (set === "all" || a.set === set) &&
-      (status === "all" || entryFor(progress, a.id).status === status) &&
+      // An F2L case matches when any of its slots does.
+      (status === "all" || slotSiblings(a).some((c) => entryFor(progress, c.id).status === status)) &&
       (group === "all" || `${a.set}:${a.group}` === group) &&
       matches(a),
   );
@@ -315,7 +316,7 @@ function Sections({ algs, progress, puzzle }: { algs: Alg[]; progress: Progress;
                 </h3>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(12.5rem,1fr))]">
                   {groupAlgs.map((alg) => (
-                    <AlgCard key={alg.id} alg={alg} entry={entryFor(progress, alg.id)} />
+                    <AlgCard key={alg.id} alg={alg} entry={entryFor(progress, alg.id)} progress={progress} />
                   ))}
                 </div>
               </div>
@@ -327,6 +328,9 @@ function Sections({ algs, progress, puzzle }: { algs: Alg[]; progress: Progress;
   );
 }
 
+/** The other F2L slots for the board, one slot after another. */
+const SLOTS_IN_ORDER = (["FL", "BR", "BL"] as const).flatMap((slot) => F2L_SLOT_ALGS.filter((a) => a.slot === slot));
+
 const boardColumns = (n: number) => Math.ceil(n / Math.max(3, Math.ceil(n / 19)));
 
 /** One square per algorithm, coloured by status: progress read like a cube face. */
@@ -337,7 +341,8 @@ function ProgressBoard({ progress, puzzle, set: selected }: { progress: Progress
     <div className="max-h-80 overflow-y-auto overscroll-contain pr-1" role="region" aria-label="Learning progress" tabIndex={0}>
     <div className={cn("grid gap-4", compact && "grid-cols-1 sm:grid-cols-2")}>
       {sets.map((set) => {
-        const algs = algsOf(puzzle).filter((a) => a.set === set);
+        // F2L has a square per case per slot: front-right first, then the other slots.
+        const algs = [...algsOf(puzzle), ...(puzzle === "3x3" ? SLOTS_IN_ORDER : [])].filter((a) => a.set === set);
         const counts = { learning: 0, learned: 0 };
         for (const a of algs) {
           const s = entryFor(progress, a.id).status;
@@ -366,7 +371,7 @@ function ProgressBoard({ progress, puzzle, set: selected }: { progress: Progress
               {algs.map((a) => (
                 <span
                   key={a.id}
-                  title={`${a.name}: ${STATUS_LABELS[entryFor(progress, a.id).status]}`}
+                  title={`${a.name}${a.slot === "FR" ? " FR" : ""}: ${STATUS_LABELS[entryFor(progress, a.id).status]}`}
                   className={cn("aspect-square rounded-[2px] transition-colors duration-300", SWATCH[entryFor(progress, a.id).status])}
                 />
               ))}

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { EyeOffIcon, LightbulbIcon, PencilIcon, RefreshCwIcon } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { ALGS, ALGS_BY_ID, SETS, type AlgSet } from "@/data/algs";
+import { ALGS, ALGS_BY_ID, F2L_SLOT_ALGS, SETS, type Alg, type AlgSet } from "@/data/algs";
 import { PuzzleSelect } from "@/components/puzzle-select";
 import { CaseImage } from "@/components/algs/case-image";
 import { MoveSequence } from "@/components/algs/move-sequence";
@@ -13,7 +13,8 @@ import { StatusToggle } from "@/components/algs/status-toggle";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { entryFor, getProgress, mainAlg, recordAttempt, setStatus, useProgress, type Progress } from "@/lib/progress";
+import { F2L_SLOTS, SLOT_INFO, type F2LSlot } from "@/lib/f2l-slot";
+import { algsFor, entryFor, getProgress, mainFor, recordAttempt, setStatus, useProgress, type Progress } from "@/lib/progress";
 import { pickNext, STATUS_WEIGHT } from "@/lib/scheduler";
 import { makeSetup } from "@/lib/setup";
 import { formatMs, logDrillAttempt } from "@/lib/solves";
@@ -25,7 +26,7 @@ import { PageIntro } from "@/components/page-intro";
 
 type StatusFilter = "learning" | "learned" | "both";
 /** Sets you've picked, across every puzzle, so each puzzle remembers its own. `timed` hides the case and times you. */
-type DrillFilter = { sets: AlgSet[]; status: StatusFilter; timed?: boolean };
+type DrillFilter = { sets: AlgSet[]; status: StatusFilter; timed?: boolean; /** F2L slots to drill; missing means all four. */ slots?: F2LSlot[] };
 
 const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
   { value: "learning", label: "In progress" },
@@ -40,15 +41,21 @@ const MODES = [
 
 const filterStore = createStore<DrillFilter>("last-layer:drill-filter:v1", { sets: [...SETS], status: "learning" });
 
-/** Cases in the chosen sets that you've started (In progress or Learned). */
-function startedIn(progress: Progress, sets: AlgSet[]) {
-  return ALGS.filter((a) => sets.includes(a.set))
+/** Every drillable case: F2L once per slot. */
+const DRILL_CASES: Alg[] = [...ALGS, ...F2L_SLOT_ALGS];
+
+const slotsOf = (filter: DrillFilter): readonly F2LSlot[] => (filter.slots?.length ? filter.slots : F2L_SLOTS);
+
+/** Cases in the chosen sets (and F2L slots) that you've started (In progress or Learned). */
+function startedIn(progress: Progress, filter: DrillFilter) {
+  const slots = slotsOf(filter);
+  return DRILL_CASES.filter((a) => filter.sets.includes(a.set) && (!a.slot || slots.includes(a.slot)))
     .map((a) => ({ id: a.id, entry: entryFor(progress, a.id) }))
     .filter((p) => STATUS_WEIGHT[p.entry.status] > 0);
 }
 
 function poolFor(progress: Progress, filter: DrillFilter) {
-  return startedIn(progress, filter.sets).filter((p) => filter.status === "both" || p.entry.status === filter.status);
+  return startedIn(progress, filter).filter((p) => filter.status === "both" || p.entry.status === filter.status);
 }
 
 /** The filter narrowed to one puzzle: its picked sets, or all of them if none is picked. */
@@ -67,7 +74,7 @@ export function DrillView() {
   const puzzleSets = setsOf(puzzle);
 
   const pool = poolFor(progress, filter);
-  const started = startedIn(progress, filter.sets);
+  const started = startedIn(progress, filter);
   const learning = started.filter((p) => p.entry.status === "learning").length;
   const learned = started.length - learning;
   const includes = (status: "learning" | "learned") => filter.status === "both" || filter.status === status;
@@ -89,7 +96,8 @@ export function DrillView() {
           You&apos;ll see a case and moves that set it up. Do the setup on your cube, solve it with your algorithm, then
           mark how it went. Setups change every time and never just undo your algorithm. Pick which sets to mix and whether to
           include cases you&apos;ve learned. With both, In progress cases come up about six times as often as learned ones,
-          and a miss brings a case back sooner.
+          and a miss brings a case back sooner. F2L cases come in all four slots, each with its own status, so mark the
+          slots you know on the case page and pick which slots to drill.
         </PageIntro>
       </div>
 
@@ -128,6 +136,33 @@ export function DrillView() {
             ))}
           </ToggleGroup>
         </div>
+
+        {filter.sets.includes("F2L") && (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span className="text-sm font-semibold">F2L slots</span>
+            <ToggleGroup
+              multiple
+              value={[...slotsOf(filter)]}
+              onValueChange={(v) => v.length > 0 && filterStore.write({ ...stored, slots: F2L_SLOTS.filter((s) => v.includes(s)) })}
+              variant="outline"
+              spacing={2}
+              className="max-w-full flex-wrap justify-end"
+              aria-label="F2L slots"
+            >
+              {F2L_SLOTS.map((s) => (
+                <ToggleGroupItem
+                  key={s}
+                  value={s}
+                  title={SLOT_INFO[s].label}
+                  aria-label={SLOT_INFO[s].label}
+                  className="px-3 font-semibold aria-pressed:bg-foreground aria-pressed:text-background"
+                >
+                  {s}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          </div>
+        )}
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <span className="text-sm font-semibold">Cases</span>
@@ -214,7 +249,7 @@ type TimedPhase = "setup" | "timing" | "done";
 /** A fresh setup for the case, built around the algorithm you use for it. */
 function setupFor(id: string): string {
   const alg = ALGS_BY_ID.get(id)!;
-  return makeSetup(alg, mainAlg(alg, entryFor(getProgress(), id)));
+  return makeSetup(alg, mainFor(alg, getProgress()));
 }
 
 function Session({
@@ -242,9 +277,9 @@ function Session({
     shownAt.current = performance.now();
   }, [session.current, session.done]);
   const entry = entryFor(progress, alg.id);
-  const main = mainAlg(alg, entry);
+  const main = mainFor(alg, progress);
   const notes = entry.notes?.trim();
-  const allCount = alg.algs.length + (entry.custom?.length ?? 0);
+  const allCount = algsFor(alg, progress).length;
   const reroll = useCallback(() => setSession({ ...session, setup: setupFor(alg.id) }), [alg.id, session, setSession]);
   // A timed drill hides the case until you stop the clock, then shows everything at once.
   const shown = revealed || (timed && phase === "done");
@@ -373,6 +408,13 @@ function Session({
                 <p className="font-clock text-[clamp(3rem,8vw,5.5rem)] leading-none tabular-nums">{formatMs(elapsed)}</p>
               )}
             </section>
+          )}
+
+          {alg.slot && (
+            <p key={alg.id} className="flex animate-in items-center gap-3 duration-200 fade-in-0">
+              <span className="rounded-md bg-foreground px-2.5 py-1 font-mono text-lg font-bold text-background">{alg.slot}</span>
+              <span className="text-xl font-extrabold tracking-tight">{SLOT_INFO[alg.slot].label} slot</span>
+            </p>
           )}
 
           {(!timed || phase !== "timing") && (

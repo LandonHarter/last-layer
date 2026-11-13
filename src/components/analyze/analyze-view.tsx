@@ -5,6 +5,7 @@ import Link from "next/link";
 import { DownloadIcon, UploadIcon } from "lucide-react";
 import { toast } from "sonner";
 import { ALGS, ALGS_BY_ID, caseLabel, fullSetLabel, SETS } from "@/data/algs";
+import { SLOT_INFO } from "@/lib/f2l-slot";
 import { GroupBarChart, HistogramChart, Legend, QQChart, TrendChart, type Fit, type GroupBar, type TrendLine } from "@/components/analyze/charts";
 import { DailySection } from "@/components/analyze/daily";
 import { PracticeSection } from "@/components/analyze/practice";
@@ -299,6 +300,7 @@ function DrillAnalysis() {
             groups: {
               Set: alg ? fullSetLabel(alg.set) : "Unknown",
               Case: alg ? caseLabel(alg) : a.id,
+              "F2L slot": alg?.slot ? SLOT_INFO[alg.slot].label : "Not F2L",
               Result: a.ok ? "Got it" : "Missed",
               Revealed: a.revealed ? "Revealed" : "Not revealed",
               Mode: a.timed ? "Timed, no image" : "With image",
@@ -340,7 +342,7 @@ function DrillAnalysis() {
         <p className="text-base text-muted-foreground">Nothing matches. Try All time or another set.</p>
       ) : (
         <>
-          <Analysis samples={samples} kind="drill" dimensions={["Set", "Case", "Result", "Revealed", "Time of day", "Weekday"]} />
+          <Analysis samples={samples} kind="drill" dimensions={["Set", "Case", "F2L slot", "Result", "Revealed", "Time of day", "Weekday"]} />
           <CaseTable attempts={attempts} />
         </>
       )}

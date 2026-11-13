@@ -6,7 +6,9 @@
  */
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { ALGS } from "../src/data/algs";
+import { ALGS, F2L_SLOT_ALGS } from "../src/data/algs";
+import { SLOT_INFO } from "../src/lib/f2l-slot";
+import { invertAlg } from "../src/lib/notation";
 import { topStickerMoves } from "../src/lib/cube";
 import { caseSvg } from "./case-svg";
 
@@ -25,8 +27,10 @@ function urlFor(alg: (typeof ALGS)[number]): string {
     // Yellow top, green front, red right: the way you hold the cube for setups.
     sch: "yrgwob",
     stage: alg.set.toLowerCase(),
-    case: alg.algs[0],
   });
+  // Other F2L slots: set the case up, then turn the cube so that slot faces you, showing its real centre colours.
+  if (alg.slot && alg.slot !== "FR") params.set("alg", `${invertAlg(alg.algs[0])} ${SLOT_INFO[alg.slot].rotation}`);
+  else params.set("case", alg.algs[0]);
   // Last-layer cases are drawn from above; F2L from the front-right corner so the slot shows.
   if (alg.set !== "F2L") params.set("view", "plan");
   if (alg.set === "PLL") {
@@ -38,7 +42,8 @@ function urlFor(alg: (typeof ALGS)[number]): string {
 }
 
 let fetched = 0;
-for (const alg of ALGS) {
+const ALL = [...ALGS, ...F2L_SLOT_ALGS];
+for (const alg of ALL) {
   const file = join(OUT, `${alg.id}.svg`);
   if (existsSync(file) && !force) continue;
   const drawn = caseSvg(alg);
@@ -57,4 +62,4 @@ for (const alg of ALGS) {
   fetched++;
   console.log(`saved ${alg.id}`);
 }
-console.log(`done: ${fetched} written, ${ALGS.length - fetched} already present`);
+console.log(`done: ${fetched} written, ${ALL.length - fetched} already present`);

@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { CaseView } from "@/components/case-view";
-import { ALGS, ALGS_BY_ID } from "@/data/algs";
+import { ALGS_BY_ID } from "@/data/algs";
 
 export const dynamicParams = false;
 
 export function generateStaticParams() {
-  return ALGS.map((a) => ({ id: a.id }));
+  return [...ALGS_BY_ID.keys()].map((id) => ({ id }));
 }
 
 export async function generateMetadata({ params }: PageProps<"/algs/[id]">): Promise<Metadata> {

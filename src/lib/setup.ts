@@ -1,5 +1,6 @@
 import { ALGS, type Alg } from "@/data/algs";
 import { engineFor, setupWorks } from "./cases";
+import { keepsOrientation } from "./cube";
 import { CFOP_SETS, isCfopSet } from "./cfop-sets";
 import { megaWithoutRotations } from "./megaminx";
 import { faceTurnsOnly, invertAlg, moveCount, parseAlg, simplifyAlg, withoutRotations } from "./notation";
@@ -15,6 +16,18 @@ const bank = (set: AlgSet) => {
   return banks.get(set)!;
 };
 const epll = ALGS.filter((a) => ["pll-ua", "pll-ub", "pll-h", "pll-z"].includes(a.id)).flatMap((a) => a.algs);
+
+/**
+ * An alg undone so you start from your usual hold. An F2L regrip alg (`y A`)
+ * ends with the cube turned; undoing it as `A' y'` would leave the turn out
+ * once rotations are taken out of the setup, so turn first: `y A' y'`.
+ */
+function undo(target: Alg, alg: string): string {
+  const inverse = invertAlg(alg, engineFor(target).notation);
+  if (target.puzzle !== "3x3" || keepsOrientation(alg)) return inverse;
+  const turn = ["y", "y2", "y'"].find((r) => keepsOrientation(`${alg} ${invertAlg(r)}`));
+  return turn ? `${turn} ${inverse}` : inverse;
+}
 
 /** Undoing an alternative, not the one you drill with, so the setup doesn't spell out the answer. */
 function otherAlg(target: Alg, main: string, random: Random): string {
@@ -81,10 +94,10 @@ function fromPair(target: Alg, main: string, random: Random): string | null {
   const engine = engineFor(target);
   const fingerprint = (state: unknown) => Array.from(state as ArrayLike<number | object>, (x) => (typeof x === "object" ? JSON.stringify(x) : x)).join("|");
   // Setups that work are exactly: a turn of the top, the main undone, a turn of the top.
-  const undo = invertAlg(main, engine.notation);
+  const undone = undo(target, main);
   // A step that ends solved without turns after (the Square-1's) still allows any of its turns at the end.
   const ends = engine.after.length > 1 ? engine.after : engine.before;
-  const goals = new Set(engine.before.flatMap((a) => ends.map((b) => fingerprint(engine.start(`${b} ${undo} ${a}`)))));
+  const goals = new Set(engine.before.flatMap((a) => ends.map((b) => fingerprint(engine.start(`${b} ${undone} ${a}`)))));
   const others = pairPieces(target);
   if (!others.length) return null;
   const hits: string[] = [];
@@ -111,7 +124,7 @@ function fromPair(target: Alg, main: string, random: Random): string | null {
 export function makeSetup(target: Alg, main: string, random: Random = Math.random): string {
   const engine = engineFor(target);
   const auf = () => pick(engine.before, random);
-  const undoOther = () => invertAlg(otherAlg(target, main, random), engine.notation);
+  const undoOther = () => undo(target, otherAlg(target, main, random));
   const attempts: (() => string | null)[] = [];
   if (endsSolved(target)) {
     attempts.push(() => fromPair(target, main, random));
@@ -131,8 +144,8 @@ export function makeSetup(target: Alg, main: string, random: Random = Math.rando
   }
   // The main undone, after whichever turn lets it start (a Square-1 alg can end at another angle, so undoing it may need one).
   for (const before of engine.before) {
-    const setup = clean(target, `${before} ${invertAlg(main, engine.notation)}`);
+    const setup = clean(target, `${before} ${undo(target, main)}`);
     if (setupWorks(target, setup, main)) return setup;
   }
-  return clean(target, invertAlg(main, engine.notation));
+  return clean(target, undo(target, main));
 }

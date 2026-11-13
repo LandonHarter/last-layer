@@ -1,4 +1,4 @@
-import { applyAlg, colorOf, f2lSolved, isSolved, keepsOrientation, solvedCube, topCornersSolved, topEdgesOriented, topOriented, type Sticker } from "./cube";
+import { applyAlg, colorOf, f2lSolved, isSolved, keepsOrientation, normalizeOrientation, solvedCube, topCornersSolved, topEdgesOriented, topOriented, type Sticker } from "./cube";
 import { CFOP_SETS, isCfopSet } from "./cfop-sets";
 import {
   megaApply,
@@ -27,7 +27,8 @@ import {
 export type { AlgSet };
 
 /** What the case checks need to know about a case. */
-export type CaseLike = { set: AlgSet; group: string; algs: string[] };
+export type CaseLike = { set: AlgSet; group: string; algs: string[]; slot?: string };
+type EngineKey = Pick<CaseLike, "set" | "group" | "slot">;
 
 export const AUFS = ["", "U", "U2", "U'"] as const;
 export const MEGA_AUFS = ["", "U", "U2", "U2'", "U'"] as const;
@@ -93,13 +94,25 @@ const sq1 = (done: (s: Sq1State) => boolean, before: readonly string[], endsSolv
   endsSolved,
 });
 
+/** The U centre stays up: only y turns of the whole cube are left over. */
+const keepsUp = (alg: string) =>
+  applyAlg(solvedCube(), alg).some((s) => s.pos[1] === 1 && s.pos[0] === 0 && s.pos[2] === 0 && s.normal[1] === 1 && colorOf(s) === "U");
+
+/** F2L away from front-right: a regrip alg may end with the cube held turned, so compare after turning it back. */
+const slotF2L: Engine = {
+  ...cube3(f2lSolved, [""]),
+  done: (s) => f2lSolved(normalizeOrientation(s as Sticker[])),
+  keepsOrientation: keepsUp,
+};
+
 // PBL turns both layers: any turn of the top with any turn of the bottom.
 const BOTH_LAYERS = AUFS.flatMap((u) => AUFS.map((d) => `${u} ${d.replace("U", "D")}`.trim()));
 
 const engines = new Map<string, Engine>();
 
 /** The checks for a case. Big-cube parity sets mix OLL parity (ends reduced) with cases that end solved. */
-export function engineFor(c: Pick<CaseLike, "set" | "group">): Engine {
+export function engineFor(c: EngineKey): Engine {
+  if (c.set === "F2L" && c.slot && c.slot !== "FR") return slotF2L;
   const key = `${c.set}|${c.group}`;
   let engine = engines.get(key);
   if (engine) return engine;
@@ -177,7 +190,7 @@ function uniform(s: Uint8Array, n: number, face: number): boolean {
 }
 
 /** The step a case's algorithm finishes. */
-export function stepDone(c: Pick<CaseLike, "set" | "group">, state: unknown): boolean {
+export function stepDone(c: EngineKey, state: unknown): boolean {
   return engineFor(c).done(state);
 }
 
@@ -245,7 +258,7 @@ export function fitAlg(c: CaseLike, candidate: string, reference: string = c.alg
 }
 
 /** True when doing `setup` from solved, then some turn of the top, then `alg`, finishes the step. */
-export function setupWorks(c: Pick<CaseLike, "set" | "group">, setup: string, alg: string): boolean {
+export function setupWorks(c: EngineKey, setup: string, alg: string): boolean {
   const engine = engineFor(c);
   const state = engine.start(setup);
   return engine.before.some((before) => {

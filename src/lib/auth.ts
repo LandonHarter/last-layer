@@ -29,6 +29,9 @@ export const auth = betterAuth({
     // Skip the database on most session checks.
     cookieCache: { enabled: true, maxAge: 5 * 60 },
   },
+  // mybase hosting sits behind Cloudflare (tunnel) and Caddy; Cloudflare sets
+  // cf-connecting-ip to the real client, so rate limits are per visitor.
+  advanced: { ipAddress: { ipAddressHeaders: ["cf-connecting-ip", "x-forwarded-for"] } },
   plugins: [mybaseAuth(mybase), nextCookies()],
 });
 

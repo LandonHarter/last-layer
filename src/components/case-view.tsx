@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeftIcon, ChevronLeftIcon, ChevronRightIcon, RefreshCwIcon } from "lucide-react";
 import { toast } from "sonner";
-import { ALGS, ALGS_BY_ID, type Alg } from "@/data/algs";
+import { ALGS, ALGS_BY_ID, F2L_SLOT_ALGS, slotSiblings, type Alg } from "@/data/algs";
 import { CaseImage } from "@/components/algs/case-image";
 import { MoveSequence } from "@/components/algs/move-sequence";
 import { NotesField } from "@/components/algs/notes-field";
@@ -15,7 +15,8 @@ import { Input } from "@/components/ui/input";
 import { fitAlg, isValidNotation } from "@/lib/cases";
 import { isLastSlotSet } from "@/lib/cfop-sets";
 import { countUnit, moveCount, type Notation } from "@/lib/notation";
-import { addCustom, allAlgs, entryFor, mainAlg, removeCustom, setMain, useProgress } from "@/lib/progress";
+import { SLOT_INFO, slotPhrase } from "@/lib/f2l-slot";
+import { addCustom, algsFor, entryFor, mainFor, removeCustom, setMain, STATUS_LABELS, useProgress, type Progress } from "@/lib/progress";
 import { EXAMPLE_ALG, HOLD, notationOf, PUZZLE_NAMES, SET_INFO, setLabel } from "@/lib/puzzles";
 import { libraryReturnUrl } from "@/lib/library-return";
 import { makeSetup } from "@/lib/setup";
@@ -25,11 +26,12 @@ export function CaseView({ id }: { id: string }) {
   const alg = ALGS_BY_ID.get(id)!;
   const progress = useProgress();
   const entry = entryFor(progress, id);
-  const main = mainAlg(alg, entry);
-  const algs = allAlgs(alg, entry);
+  const main = mainFor(alg, progress);
+  const algs = algsFor(alg, progress);
   const custom = new Set(entry.custom ?? []);
 
-  const inSet = ALGS.filter((a) => a.set === alg.set);
+  // F2L steps through the cases of the same slot.
+  const inSet = alg.slot && alg.slot !== "FR" ? F2L_SLOT_ALGS.filter((a) => a.slot === alg.slot) : ALGS.filter((a) => a.set === alg.set);
   const index = inSet.indexOf(alg);
   const prev = inSet[index - 1];
   const next = inSet[index + 1];
@@ -83,7 +85,7 @@ export function CaseView({ id }: { id: string }) {
               <h1 className="text-4xl font-extrabold leading-none tracking-tight sm:text-5xl">{alg.name}</h1>
               <p className="mt-2 text-muted-foreground">
                 {alg.group}
-                {isLastSlotSet(alg.set) && ", front-right slot"}
+                {(isLastSlotSet(alg.set) || alg.slot) && `, ${slotPhrase(alg.slot ?? "FR")}`}
                 {entry.attempts > 0 && (
                   <>
                     . Drilled {entry.attempts} {entry.attempts === 1 ? "time" : "times"}
@@ -96,7 +98,10 @@ export function CaseView({ id }: { id: string }) {
                 )}
               </p>
             </div>
-            <p className="max-w-prose text-sm text-muted-foreground">{SET_INFO[alg.set].blurb}</p>
+            <p className="max-w-prose text-sm text-muted-foreground">
+              {alg.slot ? SET_INFO[alg.set].blurb.replace("front-right slot", slotPhrase(alg.slot)) : SET_INFO[alg.set].blurb}
+            </p>
+            {alg.slot && <SlotTabs alg={alg} progress={progress} />}
             <StatusToggle id={alg.id} status={entry.status} size="default" className="max-w-md" />
           </header>
 
@@ -144,6 +149,7 @@ export function CaseView({ id }: { id: string }) {
               alg={a}
               selected={a === main}
               isDefault={a === alg.algs[0]}
+              fromFrontRight={!custom.has(a) && !alg.algs.includes(a)}
               isCustom={custom.has(a)}
               notation={notationOf(alg.set)}
               onSelect={() => setMain(alg.id, a)}
@@ -162,6 +168,40 @@ export function CaseView({ id }: { id: string }) {
     </div>
   );
 }
+
+/** One tab per slot, each with its own status square, like the progress board. */
+function SlotTabs({ alg, progress }: { alg: Alg; progress: Progress }) {
+  return (
+    <nav aria-label="Slot" className="flex max-w-md gap-1 rounded-lg bg-muted p-1">
+      {slotSiblings(alg).map((a) => {
+        const status = entryFor(progress, a.id).status;
+        const active = a.id === alg.id;
+        return (
+          <Link
+            key={a.id}
+            href={`/algs/${a.id}`}
+            replace
+            scroll={false}
+            aria-current={active ? "page" : undefined}
+            title={`${SLOT_INFO[a.slot!].label}: ${STATUS_LABELS[status]}`}
+            className={cn(
+              "flex flex-1 items-center justify-center gap-2 rounded-md px-2 py-1.5 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-ring",
+              active ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <span aria-hidden className={cn("size-2.5 rounded-[2px]", SLOT_SWATCH[status])} />
+            {a.slot}
+            <span className="sr-only">
+              {SLOT_INFO[a.slot!].label}, {STATUS_LABELS[status]}
+            </span>
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
+
+const SLOT_SWATCH = { unknown: "bg-unknown", learning: "bg-learning", learned: "bg-learned" } as const;
 
 function CaseLink({ alg, dir }: { alg: Alg | undefined; dir: "prev" | "next" }) {
   const Icon = dir === "prev" ? ChevronLeftIcon : ChevronRightIcon;
@@ -205,6 +245,7 @@ function AlgOption({
   selected,
   isDefault,
   isCustom,
+  fromFrontRight,
   notation,
   onSelect,
   onRemove,
@@ -213,6 +254,7 @@ function AlgOption({
   selected: boolean;
   isDefault: boolean;
   isCustom: boolean;
+  fromFrontRight?: boolean;
   notation: Notation;
   onSelect: () => void;
   onRemove: () => void;
@@ -238,6 +280,7 @@ function AlgOption({
         <MoveSequence alg={alg} grouped notation={notation} className={cn("min-w-0 flex-1 text-[0.95rem] leading-snug", selected && "font-bold")} />
         <span className="flex shrink-0 flex-col items-end text-xs text-muted-foreground sm:flex-row sm:gap-3">
           {isCustom && <span className="font-semibold text-foreground">Yours</span>}
+          {fromFrontRight && <span className="font-semibold text-foreground">Yours, from FR</span>}
           {isDefault && !isCustom && <span>Default</span>}
           <span className="tabular-nums">
             {count} {countUnit(alg, count)}
@@ -278,7 +321,7 @@ function AddCustom({ alg, existing }: { alg: Alg; existing: string[] }) {
     const fitted = fitAlg(alg, input);
     if (!fitted) {
       return setError(
-        `That doesn't solve ${alg.name}${isLastSlotSet(alg.set) ? " into the front-right slot" : ""}, ${alg.puzzle === "sq1" ? "or a slice turns while a corner blocks it" : `or it turns the whole ${alg.puzzle === "megaminx" ? "puzzle" : "cube"}`}. Try it on the practice setup above.`,
+        `That doesn't solve ${alg.name}${isLastSlotSet(alg.set) || alg.slot ? ` into the ${slotPhrase(alg.slot ?? "FR")}` : ""}, ${alg.puzzle === "sq1" ? "or a slice turns while a corner blocks it" : `or it turns the whole ${alg.puzzle === "megaminx" ? "puzzle" : "cube"}`}. Try it on the practice setup above.`,
       );
     }
     if (existing.includes(fitted)) return setError("That one is already in the list.");

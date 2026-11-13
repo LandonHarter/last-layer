@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // mybase hosting runs the standalone server in a container (Dockerfile).
+  output: "standalone",
 };
 
 export default nextConfig;

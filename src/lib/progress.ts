@@ -1,5 +1,7 @@
 "use client";
 
+import { ALGS_BY_ID, type Alg } from "@/data/algs";
+import { f2lToSlot } from "./f2l-slot";
 import { createStore } from "./store";
 
 export type Status = "unknown" | "learning" | "learned";
@@ -75,6 +77,30 @@ export function allAlgs(alg: { algs: string[] }, entry: Entry): string[] {
 /** The algorithm you use for a case, falling back to its default. */
 export function mainAlg(alg: { algs: string[] }, entry: Entry): string {
   return entry.main && allAlgs(alg, entry).includes(entry.main) ? entry.main : alg.algs[0];
+}
+
+/** Your front-right algs moved to this slot: shown with the slot's own list, and the default main until you pick one. */
+function fromFrontRight(alg: Alg, progress: Progress): { custom: string[]; main?: string } {
+  const base = alg.base && ALGS_BY_ID.get(alg.base);
+  if (!base || !alg.slot) return { custom: [] };
+  const entry = entryFor(progress, alg.base!);
+  return {
+    custom: (entry.custom ?? []).map((a) => f2lToSlot(a, alg.slot!)),
+    main: entry.main && allAlgs(base, entry).includes(entry.main) ? f2lToSlot(entry.main, alg.slot) : undefined,
+  };
+}
+
+/** Every algorithm for a case, F2L slots including your front-right ones moved over. */
+export function algsFor(alg: Alg, progress: Progress): string[] {
+  const own = entryFor(progress, alg.id);
+  return [...new Set([...(own.custom ?? []), ...fromFrontRight(alg, progress).custom, ...alg.algs])];
+}
+
+/** The algorithm you use for a case. An F2L slot you haven't picked one for follows your front-right main. */
+export function mainFor(alg: Alg, progress: Progress): string {
+  const own = entryFor(progress, alg.id);
+  if (own.main && algsFor(alg, progress).includes(own.main)) return own.main;
+  return fromFrontRight(alg, progress).main ?? alg.algs[0];
 }
 
 export function recordAttempt(id: string, success: boolean) {
