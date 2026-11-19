@@ -34,7 +34,6 @@ export function SmartCubeButton() {
   const Icon = connected ? BluetoothConnectedIcon : cube.status === "connecting" ? BluetoothSearchingIcon : BluetoothIcon;
   // Keep the popover open while the cube asks for its MAC address.
   const showing = open || !!cube.macRequest;
-  if (cube.status === "unsupported" && !VIRTUAL_CUBE) return null;
 
   return (
     <Popover open={showing} onOpenChange={setOpen}>
@@ -60,7 +59,7 @@ export function SmartCubeButton() {
               Connect a GAN smart cube to run the timer by turning (it follows the scramble, starts on your first turn and stops when solved) and to
               answer drills by doing the algorithm.
             </p>
-            {cube.status === "unsupported" && <p className="text-muted-foreground">This browser has no Bluetooth. Use Chrome or Edge.</p>}
+            {cube.status === "unsupported" && <BluetoothOff />}
             {cube.status === "error" && <p className="text-missed">{cube.error}</p>}
             <div className="flex gap-2">
               {cube.status !== "unsupported" && (
@@ -186,5 +185,26 @@ function MacForm({ device }: { device: string }) {
         </Button>
       </div>
     </form>
+  );
+}
+
+/** Why the browser offers no Web Bluetooth, and how to turn it on. */
+function BluetoothOff() {
+  const brave = typeof navigator !== "undefined" && "brave" in navigator;
+  const linux = typeof navigator !== "undefined" && /Linux/.test(navigator.userAgent) && !/Android/.test(navigator.userAgent);
+  const flags = brave ? "brave://flags" : "chrome://flags";
+  const code = (text: string) => <code className="font-mono text-xs break-all">{text}</code>;
+  if (!brave && !linux) {
+    return <p className="text-muted-foreground">This browser can&apos;t use Bluetooth. Use Chrome, Edge or Brave on a computer or Android (on iPhone, the Bluefy browser).</p>;
+  }
+  return (
+    <div className="flex flex-col gap-2 text-muted-foreground">
+      <p>This browser has Web Bluetooth (websites using Bluetooth) turned off. Your computer&apos;s Bluetooth is fine. To turn it on:</p>
+      <ol className="list-decimal space-y-1 pl-5">
+        {brave && <li>Enable {code("brave://flags/#brave-web-bluetooth-api")}</li>}
+        {linux && <li>Enable {code(`${flags}/#enable-experimental-web-platform-features`)} (needed on Linux)</li>}
+        <li>Relaunch the browser.</li>
+      </ol>
+    </div>
   );
 }

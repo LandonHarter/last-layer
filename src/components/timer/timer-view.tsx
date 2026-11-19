@@ -96,9 +96,14 @@ export function TimerView() {
 
   const cube = useSmartCube();
   const cubeInput = settings.input === "cube";
+  const cubeReady = puzzle === "3x3" && cube.status === "connected";
   // A smart cube runs the timer on 3x3 sessions once it's connected.
-  const cubeLive = cubeInput && puzzle === "3x3" && cube.status === "connected";
+  const cubeLive = cubeInput && cubeReady;
+  // With the keyboard or a Stackmat running the clock, a connected cube still follows the scramble and records the solve.
+  const cubeTrack = cubeReady && settings.input !== "typing";
   const cubeMoves = useRef<CubeTurn[]>([]);
+  // Keyboard or Stackmat with a cube: waiting for the scramble to finish, recording turns, or solved.
+  const track = useRef<"waiting" | "solving" | "done">("waiting");
   const guideRef = useRef<ScrambleGuide | null>(null);
   const [guide, setGuide] = useState<GuideStatus | null>(null);
 
@@ -204,11 +209,20 @@ export function TimerView() {
     setInspectStart(null);
     armInspection.current = false;
     setPhase("idle");
+    // A cube that isn't running the clock forgets the thrown-away attempt and looks at the scramble again.
+    const g = guideRef.current;
+    if (g && settingsRef.current.input !== "cube") {
+      const next = new ScrambleGuide(g.scramble, cubeState());
+      guideRef.current = next;
+      setGuide(next.current);
+      cubeMoves.current = [];
+      track.current = "waiting";
+    }
   }, [setPhase, setInspectStart]);
 
   /**
    * Stop the clock. A Stackmat passes its own time, which is the one that counts.
-   * A smart cube solve keeps its turns, and its OLL and PLL are tagged from them.
+   * A smart cube solve keeps its turns, and its OLL and PLL are tagged from them, whatever ran the clock.
    */
   const stop = useCallback((stackmatMs?: number, byCube = false) => {
     const end = performance.now();
@@ -218,7 +232,8 @@ export function TimerView() {
     const extra: Partial<Solve> = {};
     const raw = cubeMoves.current;
     cubeMoves.current = [];
-    if (settingsRef.current.input === "cube" && raw.length) {
+    track.current = "waiting";
+    if (raw.length) {
       const fitted = fitTimes(raw);
       const timed = mergeQuarterTurns(raw.map((m, i) => ({ move: m.move, t: fitted[i] - fitted[0] })));
       // Solved on the cube: the time is first turn to last, on the cube's clock.
@@ -387,7 +402,9 @@ export function TimerView() {
   // The smart cube: follow the scramble, start inspection (or get ready) once scrambled,
   // start on the first turn, stop when solved.
   useEffect(() => {
-    if (!cubeLive || !scramble) {
+    cubeMoves.current = [];
+    track.current = "waiting";
+    if (!cubeTrack || !scramble) {
       guideRef.current = null;
       setGuide(null);
       return;
@@ -395,7 +412,7 @@ export function TimerView() {
     const g = new ScrambleGuide(scramble, cubeState());
     guideRef.current = g;
     setGuide(g.current);
-  }, [cubeLive, scramble]);
+  }, [cubeTrack, cubeLive, scramble]);
 
   // Lost (the cube wasn't solved): look again whenever the cube changes, so solving it or Mark solved picks the scramble up.
   useEffect(() => {
@@ -408,9 +425,24 @@ export function TimerView() {
   }, [cube.facelets]);
 
   useEffect(() => {
-    if (!cubeLive) return;
+    if (!cubeTrack) return;
     return onCubeTurn((t) => {
       const p = phaseRef.current;
+      if (!cubeLive) {
+        // The keyboard or Stackmat runs the clock. Every turn after the scramble is part of the solve
+        // (the mat may not have reported running yet), until the cube is solved.
+        if (track.current === "done") return;
+        const g = guideRef.current;
+        if (track.current === "waiting") {
+          if (!g) return;
+          if (g.current.kind !== "scrambled") return setGuide(g.turn(t.move, t.state));
+          track.current = "solving";
+          cubeMoves.current = [];
+        }
+        cubeMoves.current.push(t);
+        if (isSolved(t.state)) track.current = "done";
+        return;
+      }
       if (p === "running") {
         cubeMoves.current.push(t);
         if (isSolved(t.state)) stop(undefined, true);
@@ -436,7 +468,7 @@ export function TimerView() {
         setPhase("ready");
       }
     });
-  }, [cubeLive, setPhase, setInspectStart, stop]);
+  }, [cubeTrack, cubeLive, setPhase, setInspectStart, stop]);
 
   // Filming: the camera stays open on the Timer; a recording runs from inspection (or the hold) until a
   // little after the clock stops. Back to idle without a solve (a cancel, an early release) throws it away.
@@ -533,7 +565,7 @@ export function TimerView() {
               />
             )}
           </div>
-          {cubeInput && <CubeGuideLine guide={guide} live={cubeLive} connected={cube.status === "connected"} />}
+          {(cubeInput || cubeTrack) && <CubeGuideLine guide={guide} live={cubeReady} connected={cube.status === "connected"} />}
           <div className="flex flex-wrap items-center justify-center gap-2">
             <SessionPicker />
             <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => newScramble(puzzle)}>
@@ -713,6 +745,12 @@ function TimerSettingsButton({ settings }: { settings: TimerSettings }) {
               <ToggleGroupItem value="550" className={item}>0.55 s</ToggleGroupItem>
             </ToggleGroup>
           </div>
+        )}
+        {(settings.input === "keyboard" || settings.input === "stackmat") && (
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            With a smart cube connected in a 3x3 session, the scramble still shows how far you are and the solve&apos;s turns are saved, so Analyze can split it
+            and tag its OLL and PLL. The {settings.input === "stackmat" ? "Stackmat" : "keyboard"} keeps the time.
+          </p>
         )}
         {settings.input === "cube" && (
           <p className="text-xs leading-relaxed text-muted-foreground">
