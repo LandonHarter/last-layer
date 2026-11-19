@@ -27,6 +27,7 @@ model User {
   docs          UserDoc[]
   solves        Solve[]
   drillAttempts DrillAttempt[]
+  clips         SolveClip[]
 
   @@map("user")
   @@schema("auth")
@@ -116,6 +117,8 @@ model Solve {
   pll          String?
   /// Size of the daily average it counted toward (5, 12, 25 or 50).
   daily        Int?
+  /// Smart cube solves: the turns with their times, "R/0 U'/112 ..." (ms from the start).
+  moves        String?
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([userId, id])
@@ -133,11 +136,36 @@ model DrillAttempt {
   revealed Boolean
   hinted   Boolean?
   timed    Boolean @default(false)
+  /// Smart cube answers: case shown to first turn, first turn to solved, and the turns made.
+  recogMs  Int?
+  execMs   Int?
+  moveCount Int?
+  cube     Boolean?
   at       BigInt
   user     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   /// Retrying a sync must not log an answer twice.
   @@unique([userId, at, caseId])
   @@map("drill_attempt")
+  @@schema("public")
+}
+
+/// A saved video of a timer solve. The file is in the project bucket at `key`
+/// (`clips/<userId>/<solveId>.<ext>`). Not tied to the Solve row by a foreign key:
+/// a changed solve is replaced on sync, and that must not drop its clip.
+model SolveClip {
+  userId     String
+  solveId    String
+  key        String
+  mime       String
+  bytes      Int
+  durationMs Int
+  /// Where in the video the clock stopped (ms from its start). Missing for clips found in the bucket without a record.
+  stopMs     Int?
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, solveId])
+  @@map("solve_clip")
   @@schema("public")
 }

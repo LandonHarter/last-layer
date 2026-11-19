@@ -1,3 +1,4 @@
+import { bestEffort, deleteClips, deleteOrphanClips } from "./clips.server";
 import { prisma } from "./db";
 import { cache } from "./mybase";
 import { Prisma } from "@/generated/prisma/client";
@@ -65,20 +66,24 @@ async function loadFromDb(userId: string): Promise<LoadedData> {
           ...(s.oll && { oll: s.oll }),
           ...(s.pll && { pll: s.pll }),
           ...(s.daily !== null && { daily: s.daily }),
+          ...(s.moves && { moves: s.moves }),
         }),
       ),
     };
   }
   if (drill.length) {
     data[DRILL_KEY] = drill.map(
-      (a): DrillAttempt => ({ id: a.caseId, ok: a.ok, ms: a.ms, revealed: a.revealed, at: Number(a.at), ...(a.hinted !== null && { hinted: a.hinted }), ...(a.timed && { timed: true }) }),
+      (a): DrillAttempt => ({ id: a.caseId, ok: a.ok, ms: a.ms, revealed: a.revealed, at: Number(a.at), ...(a.hinted !== null && { hinted: a.hinted }), ...(a.timed && { timed: true }),
+        ...(a.recogMs !== null && { recogMs: a.recogMs }), ...(a.execMs !== null && { execMs: a.execMs }),
+        ...(a.moveCount !== null && { moveCount: a.moveCount }), ...(a.cube && { cube: true }) }),
     );
   }
   return { onboarded: user?.onboarded ?? false, data };
 }
 
-const solveRow = (userId: string, s: Solve) => ({ ...s, userId, at: BigInt(s.at), inspectionMs: s.inspectionMs ?? null, oll: s.oll ?? null, pll: s.pll ?? null, daily: s.daily ?? null });
-const drillRow = (userId: string, a: DrillAttempt) => ({ userId, caseId: a.id, ok: a.ok, ms: a.ms, revealed: a.revealed, hinted: a.hinted ?? null, timed: a.timed ?? false, at: BigInt(a.at) });
+const solveRow = (userId: string, s: Solve) => ({ ...s, userId, at: BigInt(s.at), inspectionMs: s.inspectionMs ?? null, oll: s.oll ?? null, pll: s.pll ?? null, daily: s.daily ?? null, moves: s.moves ?? null });
+const drillRow = (userId: string, a: DrillAttempt) => ({ userId, caseId: a.id, ok: a.ok, ms: a.ms, revealed: a.revealed, hinted: a.hinted ?? null, timed: a.timed ?? false,
+  recogMs: a.recogMs ?? null, execMs: a.execMs ?? null, moveCount: a.moveCount ?? null, cube: a.cube ?? null, at: BigInt(a.at) });
 
 function docEntries(docs: Record<string, unknown>): [string, Prisma.InputJsonValue][] {
   const entries: [string, Prisma.InputJsonValue][] = [];
@@ -117,6 +122,10 @@ export async function applySync(userId: string, ops: SyncOps) {
     await prisma.$transaction(writes);
     await forget(userId);
   }
+  // A deleted solve takes its saved video with it.
+  const kept = new Set(Array.isArray(ops.solves?.upsert) ? ops.solves.upsert.map((s) => s?.id) : []);
+  const removed = Array.isArray(ops.solves?.remove) ? ops.solves.remove.filter((id): id is string => typeof id === "string" && !kept.has(id)) : [];
+  if (removed.length) await bestEffort(deleteClips(userId, removed));
 }
 
 /** Swap everything the account has for `data` (a backup's), and mark it onboarded. */
@@ -135,4 +144,5 @@ export async function replaceUserData(userId: string, data: Record<string, unkno
     prisma.user.update({ where: { id: userId }, data: { onboarded: true } }),
   ]);
   await forget(userId);
+  await bestEffort(deleteOrphanClips(userId));
 }

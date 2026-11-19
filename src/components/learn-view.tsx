@@ -1,12 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowRightIcon, CheckIcon, EyeIcon, LightbulbIcon, RefreshCwIcon, RotateCcwIcon, SkipForwardIcon } from "lucide-react";
 import { toast } from "sonner";
 import { ALGS, ALGS_BY_ID, type Alg, type AlgSet } from "@/data/algs";
 import { PuzzleSelect } from "@/components/puzzle-select";
 import { SetSelect } from "@/components/set-select";
+import { CubeAnswerLine } from "@/components/smartcube/cube-answer-line";
+import { useCubeAnswer } from "@/components/smartcube/use-cube-answer";
+import type { AttemptResult } from "@/lib/smartcube/matcher";
 import { CaseImage } from "@/components/algs/case-image";
 import { MoveSequence } from "@/components/algs/move-sequence";
 import { NotesField } from "@/components/algs/notes-field";
@@ -746,24 +749,42 @@ function RecallStep({ alg, main, streak, onNext }: { alg: Alg; main: string; str
   const chunks = useMemo(() => chunkAlg(main, notationOf(alg.set)), [main, alg.set]);
 
   const answer = useCallback(
-    (ok: boolean) => {
+    (ok: boolean, turned: AttemptResult | null) => {
       recordRecall(alg.id, ok);
       recordAttempt(alg.id, ok);
-      logDrillAttempt({ id: alg.id, ok, ms: Math.round(performance.now() - shownAt), revealed: !ok, at: Date.now() });
+      logDrillAttempt({
+        id: alg.id,
+        ok,
+        ms: Math.round(turned ? turned.recogMs + turned.execMs : performance.now() - shownAt),
+        revealed: !ok,
+        ...(turned && { recogMs: Math.round(turned.recogMs), execMs: Math.round(turned.execMs), moveCount: turned.moveCount, cube: true }),
+        at: Date.now(),
+      });
     },
     [alg.id, shownAt],
   );
 
-  const showMe = useCallback(() => {
-    if (shown) return;
-    answer(false);
-    setShown(true);
-  }, [answer, shown]);
+  // With a smart cube, doing the algorithm answers: solved is Got it, anything else shows the moves.
+  const resultRef = useRef<(r: AttemptResult) => void>(() => {});
+  const cube = useCubeAnswer(alg, main, alg.id, !shown, (r) => resultRef.current(r));
 
-  const gotIt = useCallback(() => {
-    answer(true);
-    onNext();
-  }, [answer, onNext]);
+  const showMe = useCallback(
+    (turned: AttemptResult | null = cube.take()) => {
+      if (shown) return;
+      answer(false, turned);
+      setShown(true);
+    },
+    [answer, shown, cube],
+  );
+
+  const gotIt = useCallback(
+    (turned: AttemptResult | null = cube.take()) => {
+      answer(true, turned);
+      onNext();
+    },
+    [answer, onNext, cube],
+  );
+  resultRef.current = (r) => (r.ok ? gotIt(r) : showMe(r));
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -805,11 +826,12 @@ function RecallStep({ alg, main, streak, onNext }: { alg: Alg; main: string; str
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3">
-          <Button size="lg" variant="outline" className="h-14 text-base font-bold" onClick={showMe}>
+          {cube.active && <CubeAnswerLine turns={cube.turns} className="col-span-2" />}
+          <Button size="lg" variant="outline" className="h-14 text-base font-bold" onClick={() => showMe()}>
             <EyeIcon data-icon="inline-start" />
             Show me <Kbd className="ml-1 hidden sm:inline-flex">J</Kbd>
           </Button>
-          <Button size="lg" className="h-14 bg-learned text-base font-bold text-learned-foreground hover:bg-learned/85" onClick={gotIt}>
+          <Button size="lg" className="h-14 bg-learned text-base font-bold text-learned-foreground hover:bg-learned/85" onClick={() => gotIt()}>
             Got it <Kbd className="ml-1 hidden bg-black/15 text-inherit sm:inline-flex">K</Kbd>
           </Button>
         </div>

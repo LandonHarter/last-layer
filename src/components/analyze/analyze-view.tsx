@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { ALGS, ALGS_BY_ID, caseLabel, fullSetLabel, SETS } from "@/data/algs";
 import { SLOT_INFO } from "@/lib/f2l-slot";
 import { GroupBarChart, HistogramChart, Legend, QQChart, TrendChart, type Fit, type GroupBar, type TrendLine } from "@/components/analyze/charts";
+import { AlgSpeedSection } from "@/components/analyze/alg-speed";
 import { DailySection } from "@/components/analyze/daily";
 import { PracticeSection } from "@/components/analyze/practice";
 import { SessionCompare } from "@/components/analyze/session-compare";
@@ -139,6 +140,23 @@ function FilterSelect({ label, value, items, onChange, className }: { label: str
   );
 }
 
+function SessionSelect({ value, items, onChange, summary }: { value: string[]; items: { value: string; label: string }[]; onChange: (v: string[]) => void; summary: string }) {
+  return (
+    <Select multiple items={items} value={value} onValueChange={(v) => v.length > 0 && onChange(v)}>
+      <SelectTrigger className="h-9 min-w-36" aria-label="Sessions">
+        <SelectValue>{() => summary}</SelectValue>
+      </SelectTrigger>
+      <SelectContent alignItemWithTrigger={false}>
+        {items.map((i) => (
+          <SelectItem key={i.value} value={i.value}>
+            {i.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
 function FilterBar({ children, summary }: { children: React.ReactNode; summary: string }) {
   return (
     <div className="sticky top-(--header-h) z-30 -mx-4 flex flex-wrap items-center gap-2 border-b border-border bg-background/90 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
@@ -175,19 +193,25 @@ function markOutliers(samples: Omit<Sample, "excluded">[], rule: OutlierRule): S
 
 function TimerAnalysis() {
   const data = useTimerData();
-  const [session, setSession] = useState("all");
+  // Null until you pick; then the first session is used.
+  const [picked, setPicked] = useState<string[] | null>(null);
   const [oll, setOll] = useState("all");
   const [pll, setPll] = useState("all");
   const [range, setRange] = useState("all");
   const [outliers, setOutliers] = useState("none");
 
   const sessionName = useMemo(() => new Map(data.sessions.map((s) => [s.id, s.name])), [data.sessions]);
+  const selected = useMemo(() => {
+    const ids = (picked ?? []).filter((id) => sessionName.has(id));
+    return ids.length ? ids : data.sessions.slice(0, 1).map((s) => s.id);
+  }, [picked, sessionName, data.sessions]);
+  const inSessions = useMemo(() => new Set(selected), [selected]);
   const solves = useMemo(() => {
     const picked = data.solves
-      .filter((s) => (session === "all" || s.session === session) && (oll === "all" || s.oll === oll) && (pll === "all" || s.pll === pll))
+      .filter((s) => inSessions.has(s.session) && (oll === "all" || s.oll === oll) && (pll === "all" || s.pll === pll))
       .sort((a, b) => a.at - b.at);
     return inRange(picked, range);
-  }, [data.solves, session, oll, pll, range]);
+  }, [data.solves, inSessions, oll, pll, range]);
   // Session comparison ignores the session filter; a "Latest N" range applies to each session.
   const compareSolves = useMemo(() => {
     const picked = data.solves.filter((s) => (oll === "all" || s.oll === oll) && (pll === "all" || s.pll === pll)).sort((a, b) => a.at - b.at);
@@ -200,8 +224,8 @@ function TimerAnalysis() {
     }
     return [...bySession.values()].flatMap((list) => inRange(list, range));
   }, [data.solves, oll, pll, range]);
-  // Time cubing follows the session filter only; with All sessions it adds every puzzle up.
-  const practiceSolves = useMemo(() => data.solves.filter((s) => session === "all" || s.session === session), [data.solves, session]);
+  // Time cubing follows the session filter only; with several sessions it adds them up.
+  const practiceSolves = useMemo(() => data.solves.filter((s) => inSessions.has(s.session)), [data.solves, inSessions]);
   // Only offer cases you've tagged a solve with.
   const tagged = useMemo(() => {
     const used = (step: "oll" | "pll") => {
@@ -230,14 +254,15 @@ function TimerAnalysis() {
   if (!data.solves.length) return <Empty text="No solves yet. Time a few and they'll show up here." href="/timer" action="Open the Timer" />;
 
   const excluded = samples.filter((s) => s.excluded).length;
-  // Dailies are per puzzle, so with All sessions picked show the Timer's current one.
-  const dailySession = session === "all" ? data.current : session;
-  const sessionItems = [{ value: "all", label: "All sessions" }, ...data.sessions.map((s) => ({ value: s.id, label: s.name }))];
+  // Dailies are per puzzle, so with several sessions picked show the first one.
+  const dailySession = selected[0] ?? data.current;
+  const sessionItems = data.sessions.map((s) => ({ value: s.id, label: s.name }));
+  const sessionsLabel = selected.length === 1 ? (sessionName.get(selected[0]) ?? "this session") : selected.length === data.sessions.length ? "all sessions" : `${selected.length} sessions`;
 
   return (
     <>
       <FilterBar summary={`${samples.length} solves${excluded ? `, ${excluded} left out as outliers` : ""}`}>
-        <FilterSelect label="Session" value={session} items={sessionItems} onChange={setSession} />
+        <SessionSelect value={selected} items={sessionItems} onChange={setPicked} summary={sessionsLabel === "all sessions" ? "All sessions" : sessionsLabel} />
         {tagged.oll.length > 0 && (
           <FilterSelect label="OLL" value={oll} items={[{ value: "all", label: "All OLLs" }, ...tagged.oll]} onChange={setOll} className="min-w-32" />
         )}
@@ -250,7 +275,8 @@ function TimerAnalysis() {
       {data.solves.some((s) => s.daily) && (
         <DailySection solves={data.solves} session={dailySession} sessionName={sessionName.get(dailySession) ?? "this session"} />
       )}
-      <PracticeSection solves={practiceSolves} sessionName={session === "all" ? "all sessions" : (sessionName.get(session) ?? "this session")} />
+      <PracticeSection solves={practiceSolves} sessionName={sessionsLabel} />
+      <AlgSpeedSection solves={solves} />
       {samples.length === 0 ? (
         <p className="text-base text-muted-foreground">Nothing in this range. Try All time or another session.</p>
       ) : (
@@ -842,10 +868,14 @@ function CaseTable({ attempts }: { attempts: DrillAttempt[] }) {
       count: list.length,
       accuracy: list.filter((a) => a.ok).length / list.length,
       median: median(list.map((a) => a.ms)),
+      // Smart cube answers split the time.
+      recog: cubeMedian(list, "recogMs"),
+      exec: cubeMedian(list, "execMs"),
       last: Math.max(...list.map((a) => a.at)),
     }));
     return r.sort((a, b) => (sort === "accuracy" ? a.accuracy - b.accuracy || b.count - a.count : sort === "time" ? b.median - a.median : b.count - a.count));
   }, [attempts, sort]);
+  const cube = rows.some((r) => r.recog !== null);
 
   return (
     <section aria-labelledby="cases" className="flex flex-col gap-4">
@@ -873,6 +903,12 @@ function CaseTable({ attempts }: { attempts: DrillAttempt[] }) {
               <th scope="col" className="px-4 py-2 font-medium">Answers</th>
               <th scope="col" className="px-4 py-2 font-medium">Got it</th>
               <th scope="col" className="px-4 py-2 font-medium">Median time</th>
+              {cube && (
+                <>
+                  <th scope="col" className="px-4 py-2 font-medium">Recognition</th>
+                  <th scope="col" className="px-4 py-2 font-medium">Execution</th>
+                </>
+              )}
               <th scope="col" className="px-4 py-2 font-medium">Last drilled</th>
             </tr>
           </thead>
@@ -894,6 +930,12 @@ function CaseTable({ attempts }: { attempts: DrillAttempt[] }) {
                   </span>
                 </td>
                 <td className="px-4 py-2">{formatMs(r.median)}</td>
+                {cube && (
+                  <>
+                    <td className="px-4 py-2">{formatMs(r.recog)}</td>
+                    <td className="px-4 py-2">{formatMs(r.exec)}</td>
+                  </>
+                )}
                 <td className="px-4 py-2 whitespace-nowrap">{dateTime.format(r.last)}</td>
               </tr>
             ))}
@@ -902,4 +944,10 @@ function CaseTable({ attempts }: { attempts: DrillAttempt[] }) {
       </div>
     </section>
   );
+}
+
+/** Median of a smart cube split over the answers that have it, or null. */
+function cubeMedian(list: DrillAttempt[], key: "recogMs" | "execMs"): number | null {
+  const values = list.map((a) => a[key]).filter((v): v is number => v !== undefined);
+  return values.length ? median(values) : null;
 }

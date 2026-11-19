@@ -11,21 +11,32 @@ export function MoveSequence({
   alg,
   grouped,
   notation,
+  progress,
   className,
 }: {
   alg: string;
   grouped?: boolean | "labeled";
   /** Which puzzle's notation, so megaminx algs don't get 3x3 trigger names. */
   notation?: Notation;
+  /** Smart cube scramble guide: moves before `done` are made (dimmed), the next one is marked, half made when `half`. */
+  progress?: { done: number; half?: boolean };
   className?: string;
 }) {
-  const chunks = grouped ? chunkAlg(alg, notation) : [];
+  const chunks = grouped && !progress ? chunkAlg(alg, notation) : [];
   // One chunk is only worth drawing as a group when it has a name to show.
   if (chunks.length < 2 && !(grouped === "labeled" && chunks[0]?.name)) {
     return (
       <p className={cn("flex flex-wrap gap-x-[0.55em] gap-y-[0.15em] font-mono font-medium", className)}>
         {splitMoves(alg).map((move, i) => (
-          <span key={i} className="whitespace-nowrap">
+          <span
+            key={i}
+            className={cn(
+              "whitespace-nowrap",
+              progress && i < progress.done && "text-muted-foreground/45",
+              progress && i === progress.done && "underline decoration-2 underline-offset-4",
+              progress && i === progress.done && progress.half && "text-learning",
+            )}
+          >
             {move}
           </span>
         ))}

@@ -1,14 +1,18 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
+import { VideoIcon } from "lucide-react";
 import { MoveSequence } from "@/components/algs/move-sequence";
 import { CasePicker } from "@/components/timer/case-picker";
 import { PenaltyToggle } from "@/components/timer/penalty-toggle";
+import { SolveReplay } from "@/components/timer/solve-replay";
+import { ClipDialog } from "@/components/timer/clip-dialog";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { formatMs, formatSolve, type Solve } from "@/lib/solves";
 import { rollingAverage } from "@/lib/stats";
+import { useRecorder } from "@/lib/video/recorder";
 
 const SHOWN = 200;
 
@@ -18,6 +22,10 @@ const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", tim
 export function SolveList({ solves, times, onDelete }: { solves: Solve[]; times: number[]; onDelete: (s: Solve) => void }) {
   const ao5 = useMemo(() => rollingAverage(times, 5), [times]);
   const rows = solves.map((s, i) => ({ solve: s, index: i + 1, ao5: ao5[i] })).slice(-SHOWN).reverse();
+  const [replay, setReplay] = useState<Solve | null>(null);
+  const [watch, setWatch] = useState<Solve | null>(null);
+  const recorder = useRecorder();
+  const hasClip = (s: Solve) => recorder.saved.has(s.id) || recorder.last?.solveId === s.id;
 
   return (
     <section aria-labelledby="solves-heading" className="flex min-h-0 flex-1 flex-col gap-2">
@@ -33,7 +41,10 @@ export function SolveList({ solves, times, onDelete }: { solves: Solve[]; times:
               <Popover>
                 <PopoverTrigger className="grid w-full grid-cols-[3rem_1fr_1fr] items-baseline rounded-md px-2 py-1 text-left hover:bg-muted">
                   <span className="text-muted-foreground">{index}</span>
-                  <span className={solve.penalty === "dnf" ? "font-semibold text-missed" : "font-semibold"}>{formatSolve(solve)}</span>
+                  <span className={solve.penalty === "dnf" ? "font-semibold text-missed" : "font-semibold"}>
+                    {formatSolve(solve)}
+                    {recorder.saved.has(solve.id) && <VideoIcon aria-label="Saved clip" className="ml-1.5 inline size-3.5 align-[-0.15em] text-muted-foreground" />}
+                  </span>
                   <span className="text-right text-muted-foreground">{ao5 === null ? "" : formatMs(ao5)}</span>
                 </PopoverTrigger>
                 <PopoverContent side="left" align="start" className="w-80 gap-3 p-4">
@@ -50,6 +61,20 @@ export function SolveList({ solves, times, onDelete }: { solves: Solve[]; times:
                     <CasePicker solve={solve} step="oll" />
                     <CasePicker solve={solve} step="pll" />
                   </div>
+                  {(solve.moves || hasClip(solve)) && (
+                    <div className="flex flex-wrap gap-2">
+                      {solve.moves && (
+                        <Button variant="outline" size="sm" onClick={() => setReplay(solve)}>
+                          Replay and splits
+                        </Button>
+                      )}
+                      {hasClip(solve) && (
+                        <Button variant="outline" size="sm" onClick={() => setWatch(solve)}>
+                          Watch clip
+                        </Button>
+                      )}
+                    </div>
+                  )}
                   <div className="flex items-center justify-between gap-2">
                     <PenaltyToggle solve={solve} />
                     <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-missed" onClick={() => onDelete(solve)}>
@@ -62,6 +87,8 @@ export function SolveList({ solves, times, onDelete }: { solves: Solve[]; times:
           ))}
         </ol>
       )}
+      {replay && <SolveReplay solve={replay} open onOpenChange={(open) => !open && setReplay(null)} />}
+      {watch && <ClipDialog solve={watch} open onOpenChange={(open) => !open && setWatch(null)} />}
       {solves.length > SHOWN && (
         <p className="text-xs text-muted-foreground">
           Showing your latest {SHOWN}.{" "}

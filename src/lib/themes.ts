@@ -53,6 +53,14 @@ export const THEMES: ThemeDef[] = [
     surface: "#e9eae8",
     stickers: { U: "#e6b400", F: "#8c8f8a", R: "#5d605c", L: "#b4b6b2", B: "#3f423e", D: "#fafaf9" },
   },
+  {
+    id: "nord",
+    name: "Nord",
+    description: "Arctic slate with frost and aurora",
+    mode: "dark",
+    surface: "#2e3440",
+    stickers: { U: "#ebcb8b", F: "#a3be8c", R: "#bf616a", L: "#d08770", B: "#5e81ac", D: "#eceff4" },
+  },
 ];
 
 export const THEME_IDS = THEMES.map((t) => t.id);

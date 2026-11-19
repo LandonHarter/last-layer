@@ -7,12 +7,15 @@ import { MoveSequence } from "@/components/algs/move-sequence";
 import { ScrambleNet } from "@/components/timer/scramble-net";
 import { SessionPicker } from "@/components/timer/session-picker";
 import { SolveList } from "@/components/timer/solve-list";
+import { SolveReplay } from "@/components/timer/solve-replay";
 import { CasePicker } from "@/components/timer/case-picker";
 import { PenaltyToggle } from "@/components/timer/penalty-toggle";
 import { AddTimeButton, TypedClock, type TypedTime } from "@/components/timer/add-time";
 import { SessionStats } from "@/components/timer/session-stats";
 import { DailyCard } from "@/components/timer/daily-card";
+import { ClipDialog } from "@/components/timer/clip-dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Kbd } from "@/components/ui/kbd";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -37,9 +40,28 @@ import {
   type Penalty,
   type Solve,
   type TimerSettings,
+  type VideoSaveRule,
 } from "@/lib/solves";
 import { averageOf } from "@/lib/stats";
+import { isSolved } from "@/lib/cube";
+import { ScrambleGuide, type GuideStatus } from "@/lib/smartcube/guide";
+import { encodeMoves, fitTimes, mergeQuarterTurns } from "@/lib/smartcube/moves";
+import { identifyCases } from "@/lib/smartcube/splits";
+import { cubeState, markSolved, onCubeTurn, useSmartCube, VIRTUAL_CUBE, type CubeTurn } from "@/lib/smartcube/store";
+import { signedIn } from "@/lib/storage";
 import { cn } from "@/lib/utils";
+import { autoSave } from "@/lib/video/rules";
+import {
+  cameraStream,
+  cancelRecording,
+  forgetSolve,
+  recordingSupported,
+  startRecording,
+  stopRecording,
+  useCamera,
+  useRecorder,
+  useVideoInputs,
+} from "@/lib/video/recorder";
 
 type Phase = "idle" | "inspecting" | "holding" | "ready" | "running";
 
@@ -71,6 +93,14 @@ export function TimerView() {
   const armedSize = armed?.session === data.current ? armed.size : null;
   const armedRef = useRef(armedSize);
   armedRef.current = armedSize;
+
+  const cube = useSmartCube();
+  const cubeInput = settings.input === "cube";
+  // A smart cube runs the timer on 3x3 sessions once it's connected.
+  const cubeLive = cubeInput && puzzle === "3x3" && cube.status === "connected";
+  const cubeMoves = useRef<CubeTurn[]>([]);
+  const guideRef = useRef<ScrambleGuide | null>(null);
+  const [guide, setGuide] = useState<GuideStatus | null>(null);
 
   const [phase, setPhaseState] = useState<Phase>("idle");
   const [now, setNow] = useState(0);
@@ -176,15 +206,33 @@ export function TimerView() {
     setPhase("idle");
   }, [setPhase, setInspectStart]);
 
-  /** Stop the clock. A Stackmat passes its own time, which is the one that counts. */
-  const stop = useCallback((stackmatMs?: number) => {
+  /**
+   * Stop the clock. A Stackmat passes its own time, which is the one that counts.
+   * A smart cube solve keeps its turns, and its OLL and PLL are tagged from them.
+   */
+  const stop = useCallback((stackmatMs?: number, byCube = false) => {
     const end = performance.now();
-    const ms = stackmatMs ?? Math.round(end - startRef.current);
+    let ms = stackmatMs ?? Math.round(end - startRef.current);
     const inspected = inspectStartRef.current;
     const inspectionMs = inspected === null ? undefined : Math.round(startRef.current - inspected);
+    const extra: Partial<Solve> = {};
+    const raw = cubeMoves.current;
+    cubeMoves.current = [];
+    if (settingsRef.current.input === "cube" && raw.length) {
+      const fitted = fitTimes(raw);
+      const timed = mergeQuarterTurns(raw.map((m, i) => ({ move: m.move, t: fitted[i] - fitted[0] })));
+      // Solved on the cube: the time is first turn to last, on the cube's clock.
+      if (byCube) ms = Math.round(timed.at(-1)!.t);
+      extra.moves = encodeMoves(timed);
+      try {
+        Object.assign(extra, identifyCases(scrambleRef.current, timed));
+      } catch {
+        // Not a CFOP solve we can read: no tags.
+      }
+    }
     setInspectStart(null);
-    // The mat stops itself, so no key is down to swallow.
-    swallowRelease.current = stackmatMs === undefined;
+    // The mat and the cube stop themselves, so no key is down to swallow.
+    swallowRelease.current = stackmatMs === undefined && !byCube;
     setPhase("idle");
     setNow(end);
     const solve = addSolve({
@@ -194,7 +242,13 @@ export function TimerView() {
       at: Date.now(),
       inspectionMs,
       daily: dailyTag(),
+      ...extra,
     });
+    const set = settingsRef.current;
+    if (set.videoOn) {
+      const session = getTimerData().solves.filter((s) => s.session === solve.session);
+      stopRecording(solve.id, set.videoTailMs, signedIn() && autoSave(set, solve, session));
+    }
     setLastId(solve.id);
     newScramble(puzzleRef.current);
   }, [setPhase, setInspectStart, newScramble, dailyTag]);
@@ -214,6 +268,8 @@ export function TimerView() {
   const press = useCallback(() => {
     if (settingsRef.current.input === "typing") return;
     const p = phaseRef.current;
+    // The cube starts itself; a key or tap only stops it, in case the cube lost track.
+    if (settingsRef.current.input === "cube") return p === "running" ? stop() : undefined;
     const stackmat = settingsRef.current.input === "stackmat";
     if (p === "running") return stackmat ? undefined : stop();
     if (p === "idle" && settingsRef.current.inspection) {
@@ -225,7 +281,10 @@ export function TimerView() {
   }, [beginHold, stop]);
 
   const release = useCallback(() => {
-    if (settingsRef.current.input === "typing") return;
+    if (settingsRef.current.input === "typing" || settingsRef.current.input === "cube") {
+      swallowRelease.current = false;
+      return;
+    }
     if (swallowRelease.current) {
       swallowRelease.current = false;
       return;
@@ -252,7 +311,7 @@ export function TimerView() {
   useEffect(() => {
     const ignore = (e: KeyboardEvent) => {
       const target = e.target instanceof Element ? e.target : null;
-      return !!target?.closest("input, textarea, [role=listbox], [role=menu], [data-slot=popover-content]");
+      return !!target?.closest("input, textarea, [role=listbox], [role=menu], [role=dialog], [data-slot=popover-content]");
     };
     function onKeyDown(e: KeyboardEvent) {
       if (ignore(e)) return;
@@ -325,6 +384,71 @@ export function TimerView() {
     },
     [cancel, setPhase, stop],
   );
+  // The smart cube: follow the scramble, start inspection (or get ready) once scrambled,
+  // start on the first turn, stop when solved.
+  useEffect(() => {
+    if (!cubeLive || !scramble) {
+      guideRef.current = null;
+      setGuide(null);
+      return;
+    }
+    const g = new ScrambleGuide(scramble, cubeState());
+    guideRef.current = g;
+    setGuide(g.current);
+  }, [cubeLive, scramble]);
+
+  // Lost (the cube wasn't solved): look again whenever the cube changes, so solving it or Mark solved picks the scramble up.
+  useEffect(() => {
+    const g = guideRef.current;
+    if (!g || phaseRef.current !== "idle" || g.current.kind !== "lost") return;
+    const next = new ScrambleGuide(g.scramble, cubeState());
+    if (next.current.kind === "lost") return;
+    guideRef.current = next;
+    setGuide(next.current);
+  }, [cube.facelets]);
+
+  useEffect(() => {
+    if (!cubeLive) return;
+    return onCubeTurn((t) => {
+      const p = phaseRef.current;
+      if (p === "running") {
+        cubeMoves.current.push(t);
+        if (isSolved(t.state)) stop(undefined, true);
+        return;
+      }
+      if (p === "inspecting" || p === "ready") {
+        cubeMoves.current = [t];
+        startRef.current = t.local;
+        setNow(performance.now());
+        setPhase("running");
+        return;
+      }
+      const g = guideRef.current;
+      if (!g) return;
+      const status = g.turn(t.move, t.state);
+      setGuide(status);
+      if (status.kind !== "scrambled") return;
+      if (settingsRef.current.inspection) {
+        setInspectStart(performance.now());
+        setNow(performance.now());
+        setPhase("inspecting");
+      } else {
+        setPhase("ready");
+      }
+    });
+  }, [cubeLive, setPhase, setInspectStart, stop]);
+
+  // Filming: the camera stays open on the Timer; a recording runs from inspection (or the hold) until a
+  // little after the clock stops. Back to idle without a solve (a cancel, an early release) throws it away.
+  const filming = settings.videoOn && settings.input !== "typing";
+  useCamera(filming, settings.videoDevice);
+  useEffect(() => {
+    if (!filming) return;
+    if (phase === "idle") cancelRecording();
+    else startRecording();
+  }, [phase, filming]);
+  const recorder = useRecorder();
+
   const stackmat = settings.input === "stackmat";
   const typing = settings.input === "typing";
   const connection = useStackmat(stackmat, settings.stackmatDevice || undefined, onPacket);
@@ -336,6 +460,9 @@ export function TimerView() {
   }, [settings.input, stackmat, cancel]);
 
   const last = solves.find((s) => s.id === lastId) ?? solves.at(-1) ?? null;
+  const [replaying, setReplaying] = useState(false);
+  const [watching, setWatching] = useState(false);
+  const lastHasClip = !!last && (recorder.last?.solveId === last.id || recorder.saved.has(last.id));
   const inspecting = inspectStart !== null && phase !== "running";
   const inspectElapsed = inspecting ? Math.max(0, now - inspectStart) : 0;
 
@@ -359,6 +486,7 @@ export function TimerView() {
 
   function removeSolve(solve: Solve) {
     deleteSolve(solve.id);
+    forgetSolve(solve.id);
     toast(`Deleted ${formatSolve(solve)}`, { action: { label: "Undo", onClick: () => restoreSolve(solve) } });
   }
 
@@ -397,9 +525,15 @@ export function TimerView() {
           <h1 className="sr-only">Timer</h1>
           <div className="min-h-[4.5rem] max-w-3xl">
             {scramble && (
-              <MoveSequence key={scramble} alg={scramble} className={cn("animate-in justify-center leading-snug duration-200 fade-in-0", scrambleSize)} />
+              <MoveSequence
+                key={scramble}
+                alg={scramble}
+                progress={guide?.kind === "on" ? guide : guide?.kind === "off" ? { done: guide.done } : guide?.kind === "scrambled" ? { done: Infinity } : undefined}
+                className={cn("animate-in justify-center leading-snug duration-200 fade-in-0", scrambleSize)}
+              />
             )}
           </div>
+          {cubeInput && <CubeGuideLine guide={guide} live={cubeLive} connected={cube.status === "connected"} />}
           <div className="flex flex-wrap items-center justify-center gap-2">
             <SessionPicker />
             <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => newScramble(puzzle)}>
@@ -436,11 +570,23 @@ export function TimerView() {
                 {last ? (
                   <>
                     <PenaltyToggle solve={last} />
+                    {last.moves && (
+                      <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => setReplaying(true)}>
+                        Replay
+                      </Button>
+                    )}
+                    {lastHasClip && (
+                      <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => setWatching(true)}>
+                        {recorder.last?.solveId === last.id && recorder.last.save === "saved" ? "Clip (saved)" : "Clip"}
+                      </Button>
+                    )}
                     <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-missed" onClick={() => removeSolve(last)}>
                       Delete
                     </Button>
                   </>
-                ) : typing ? null : stackmat ? (
+                ) : typing ? null : cubeInput ? (
+                  <p className="text-sm text-muted-foreground">Follow the scramble on the cube. Your first turn starts the clock; solving it stops it.</p>
+                ) : stackmat ? (
                   <p className="text-sm text-muted-foreground">Put both hands on the mat until it turns green, then lift them to start.</p>
                 ) : (
                   <p className="text-sm text-muted-foreground">
@@ -458,6 +604,11 @@ export function TimerView() {
                 >
                   <span aria-hidden="true" className={cn("size-2 rounded-full", connection === "connected" ? "bg-learned" : "bg-missed")} />
                   {CONNECTION[connection]}
+                </p>
+              )}
+              {filming && (recorder.camera === "blocked" || recorder.camera === "error") && (
+                <p className="mt-1 text-sm text-missed" aria-live="polite">
+                  {recorder.camera === "blocked" ? "Allow the camera to film your solves." : "Couldn't open the camera. Pick another in Settings."}
                 </p>
               )}
               {last && puzzle === "3x3" && (
@@ -489,6 +640,8 @@ export function TimerView() {
         <SessionStats times={times} />
         <SolveList solves={solves} times={times} onDelete={removeSolve} />
       </aside>
+      {replaying && last?.moves && <SolveReplay solve={last} open onOpenChange={setReplaying} />}
+      {watching && last && <ClipDialog solve={last} open onOpenChange={setWatching} />}
     </div>
   );
 }
@@ -500,13 +653,14 @@ function TimerSettingsButton({ settings }: { settings: TimerSettings }) {
   // Device names only show once the microphone is allowed, so look again on each open.
   const inputs = useAudioInputs(open && settings.input);
   const devices = [{ value: "", label: "Default input" }, ...inputs.map((d) => ({ value: d.id, label: d.label }))];
+  const supportsCube = useSmartCube().status !== "unsupported" || VIRTUAL_CUBE;
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger render={<Button variant="ghost" size="sm" className="text-muted-foreground" />}>
         <Settings2Icon data-icon="inline-start" />
         Settings
       </PopoverTrigger>
-      <PopoverContent className="w-80 gap-4 p-4">
+      <PopoverContent className="max-h-[min(40rem,calc(100svh-6rem))] w-80 gap-4 overflow-y-auto p-4">
         <div className={row}>
           <span className="text-sm font-medium">Timer</span>
           <ToggleGroup
@@ -520,6 +674,7 @@ function TimerSettingsButton({ settings }: { settings: TimerSettings }) {
             <ToggleGroupItem value="keyboard" className={item}>Keyboard</ToggleGroupItem>
             <ToggleGroupItem value="stackmat" className={item}>Stackmat</ToggleGroupItem>
             <ToggleGroupItem value="typing" className={item}>Typing</ToggleGroupItem>
+            {(supportsCube || settings.input === "cube") && <ToggleGroupItem value="cube" className={item}>Cube</ToggleGroupItem>}
           </ToggleGroup>
         </div>
         {settings.input === "stackmat" && (
@@ -559,6 +714,12 @@ function TimerSettingsButton({ settings }: { settings: TimerSettings }) {
             </ToggleGroup>
           </div>
         )}
+        {settings.input === "cube" && (
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            Connect a smart cube with the Bluetooth button at the top. The scramble shows how far you are; once it&apos;s scrambled, your first turn starts the
+            clock and solving stops it. Its turns are saved, so Analyze can split the solve and tag its OLL and PLL.
+          </p>
+        )}
         {settings.input === "typing" && (
           <p className="text-xs leading-relaxed text-muted-foreground">
             Time with any clock, then type the result where the time goes and press Enter. 1234 is 12.34, 110234 is 11:02.34.
@@ -595,12 +756,184 @@ function TimerSettingsButton({ settings }: { settings: TimerSettings }) {
               </ToggleGroup>
             </div>
             <p className="text-xs leading-relaxed text-muted-foreground">
-              With inspection on, tap Space to start the 15 s countdown, then {settings.input === "stackmat" ? "start the mat" : "hold to start"}. Starting
-              after 15 s adds +2, after 17 s is a DNF.
+              {settings.input === "cube"
+                ? "With inspection on, the 15 s countdown starts once the cube is scrambled."
+                : `With inspection on, tap Space to start the 15 s countdown, then ${settings.input === "stackmat" ? "start the mat" : "hold to start"}.`}{" "}
+              Starting after 15 s adds +2, after 17 s is a DNF.
             </p>
+            {recordingSupported() && <VideoSettings settings={settings} open={open} />}
           </>
         )}
       </PopoverContent>
     </Popover>
   );
+}
+
+const SAVE_RULES: { value: VideoSaveRule; label: string }[] = [
+  { value: "none", label: "Only when I press Save" },
+  { value: "all", label: "Every solve" },
+  { value: "under", label: "Solves under a time" },
+  { value: "top", label: "Top solves in the session" },
+  { value: "pb", label: "New best single" },
+];
+
+/** Settings > Video: film each solve, from which camera, for how long after, and which clips to keep. */
+function VideoSettings({ settings, open }: { settings: TimerSettings; open: boolean }) {
+  const row = "flex items-center justify-between gap-4";
+  const item = "px-2.5 aria-pressed:bg-foreground aria-pressed:text-background";
+  const { camera } = useRecorder();
+  // Camera names show once it's allowed.
+  const cameras = useVideoInputs(`${open}-${camera}`);
+  const devices = [{ value: "", label: "Default camera" }, ...cameras.map((d) => ({ value: d.id, label: d.label }))];
+  const account = signedIn();
+  return (
+    <div className="flex flex-col gap-3 border-t border-border pt-4">
+      <div className={row}>
+        <span className="text-sm font-medium">Film solves</span>
+        <ToggleGroup
+          value={[settings.videoOn ? "on" : "off"]}
+          onValueChange={(v) => v[0] && updateTimerSettings({ videoOn: v[0] === "on" })}
+          variant="outline"
+          size="sm"
+          spacing={0}
+          aria-label="Film solves"
+        >
+          <ToggleGroupItem value="off" className={item}>Off</ToggleGroupItem>
+          <ToggleGroupItem value="on" className={item}>On</ToggleGroupItem>
+        </ToggleGroup>
+      </div>
+      {settings.videoOn && (
+        <>
+          <Select items={devices} value={settings.videoDevice} onValueChange={(v) => updateTimerSettings({ videoDevice: (v as string | null) ?? "" })}>
+            <SelectTrigger className="h-9 w-full" aria-label="Camera">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {devices.map((d) => (
+                <SelectItem key={d.value} value={d.value}>
+                  {d.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <CameraPreview />
+          <div className={row}>
+            <span className="text-sm font-medium">Keep filming</span>
+            <ToggleGroup
+              value={[String(settings.videoTailMs)]}
+              onValueChange={(v) => v[0] && updateTimerSettings({ videoTailMs: Number(v[0]) })}
+              variant="outline"
+              size="sm"
+              spacing={0}
+              aria-label="Keep filming after the stop"
+            >
+              <ToggleGroupItem value="1000" className={item}>1 s</ToggleGroupItem>
+              <ToggleGroupItem value="3000" className={item}>3 s</ToggleGroupItem>
+              <ToggleGroupItem value="5000" className={item}>5 s</ToggleGroupItem>
+            </ToggleGroup>
+          </div>
+          <div className="flex flex-col gap-2">
+            <span className="text-sm font-medium">Save automatically</span>
+            <Select items={SAVE_RULES} value={settings.videoSave} disabled={!account} onValueChange={(v) => v && updateTimerSettings({ videoSave: v as VideoSaveRule })}>
+              <SelectTrigger className="h-9 w-full" aria-label="Save automatically">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {SAVE_RULES.map((r) => (
+                  <SelectItem key={r.value} value={r.value}>
+                    {r.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {account && settings.videoSave === "under" && (
+              <label className="flex items-center gap-2 text-sm">
+                Under
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  min={1}
+                  step={0.5}
+                  className="h-8 w-20"
+                  defaultValue={settings.videoUnderMs / 1000}
+                  onChange={(e) => {
+                    const sec = Number(e.target.value);
+                    if (sec > 0) updateTimerSettings({ videoUnderMs: Math.round(sec * 1000) });
+                  }}
+                />
+                seconds
+              </label>
+            )}
+            {account && settings.videoSave === "top" && (
+              <label className="flex items-center gap-2 text-sm">
+                Among the best
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  max={1000}
+                  step={1}
+                  className="h-8 w-20"
+                  defaultValue={settings.videoTopN}
+                  onChange={(e) => {
+                    const n = Math.round(Number(e.target.value));
+                    if (n >= 1) updateTimerSettings({ videoTopN: Math.min(1000, n) });
+                  }}
+                />
+                in the session
+              </label>
+            )}
+          </div>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            Filming starts with inspection (or when you hold to start) and stops {settings.videoTailMs / 1000} s after the clock. Watch the clip under the time
+            until your next solve starts; only saved clips stay.{" "}
+            {account ? "A rule decides once, when the solve ends. DNFs are only saved by Every solve." : "Sign in to save clips to your account."}
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
+
+function CameraPreview() {
+  const { camera } = useRecorder();
+  const ref = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    if (ref.current) ref.current.srcObject = camera === "on" ? cameraStream() : null;
+  }, [camera]);
+  return (
+    <div className="flex aspect-video w-full items-center justify-center overflow-hidden rounded-md bg-muted">
+      {camera === "on" ? (
+        <video ref={ref} autoPlay playsInline muted className="size-full object-cover" />
+      ) : (
+        <p className={cn("px-3 text-center text-xs", camera === "blocked" || camera === "error" ? "text-missed" : "text-muted-foreground")}>
+          {camera === "blocked" ? "Allow the camera so the page can film your solves." : camera === "error" ? "Couldn't open that camera. Pick another." : "Opening the camera…"}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** Under the scramble with a smart cube: what to do next. */
+function CubeGuideLine({ guide, live, connected }: { guide: GuideStatus | null; live: boolean; connected: boolean }) {
+  const line = "flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-sm";
+  if (!connected) return <p className={cn(line, "text-muted-foreground")}>Connect your smart cube with the Bluetooth button at the top.</p>;
+  if (!live) return <p className={cn(line, "text-muted-foreground")}>Smart cubes work in 3x3 sessions.</p>;
+  if (!guide) return null;
+  if (guide.kind === "off")
+    return (
+      <div className={cn(line, "text-missed")} aria-live="polite">
+        Undo <MoveSequence alg={guide.fix} className="text-base" />
+      </div>
+    );
+  if (guide.kind === "lost")
+    return (
+      <div className={cn(line, "pointer-events-auto text-muted-foreground")} onPointerDown={(e) => e.stopPropagation()}>
+        Solve the cube to start this scramble, or if it is solved,
+        <Button variant="outline" size="sm" onClick={markSolved}>
+          Mark solved
+        </Button>
+      </div>
+    );
+  return null;
 }

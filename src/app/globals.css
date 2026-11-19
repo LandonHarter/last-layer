@@ -2,7 +2,7 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-@custom-variant dark (&:where([data-theme="blackout"], [data-theme="blackout"] *, [data-theme="speedstack"], [data-theme="speedstack"] *));
+@custom-variant dark (&:where([data-theme="blackout"], [data-theme="blackout"] *, [data-theme="speedstack"], [data-theme="speedstack"] *, [data-theme="nord"], [data-theme="nord"] *));
 
 @theme inline {
   --color-background: var(--background);
@@ -212,6 +212,39 @@
   --chart-2: #b36b00;
   --chart-3: #1f9a7c;
   --chart-4: #a8488f;
+}
+
+[data-theme="nord"] {
+  color-scheme: dark;
+  --background: #2e3440;
+  --foreground: #eceff4;
+  --card: #3b4252;
+  --card-foreground: #eceff4;
+  --popover: #3b4252;
+  --popover-foreground: #eceff4;
+  --primary: #88c0d0;
+  --primary-foreground: #2e3440;
+  --secondary: #434c5e;
+  --secondary-foreground: #eceff4;
+  --muted: #3b4252;
+  --muted-foreground: #a7b1c2;
+  --accent: #434c5e;
+  --accent-foreground: #eceff4;
+  --destructive: #e8a0a7;
+  --border: #434c5e;
+  --input: #4c566a;
+  --ring: #88c0d0;
+  --radius: 0.5rem;
+  --unknown: #4c566a;
+  --learning: #ebcb8b;
+  --learning-foreground: #2e3440;
+  --learned: #a3be8c;
+  --learned-foreground: #2e3440;
+  --missed: #e8a0a7;
+  --chart-1: #81a1c1;
+  --chart-2: #d08770;
+  --chart-3: #a3be8c;
+  --chart-4: #b48ead;
 }
 
 @layer base {

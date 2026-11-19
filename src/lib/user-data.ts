@@ -70,6 +70,8 @@ export const isEmptyOps = (ops: SyncOps) => !Object.keys(ops.docs).length && !op
 
 const PENALTIES: Penalty[] = ["none", "+2", "dnf"];
 const INT_MAX = 2 ** 31 - 1;
+/** Longest move record kept for a solve (about 500 turns). */
+export const MAX_MOVES = 5000;
 
 const str = (v: unknown, max: number): v is string => typeof v === "string" && v.length <= max;
 const optStr = (v: unknown, max: number) => (str(v, max) && v ? v : undefined);
@@ -90,13 +92,19 @@ export function cleanSolve(v: unknown): Solve | null {
     oll: optStr(s.oll, 50),
     pll: optStr(s.pll, 50),
     daily: DAILY_SIZES.includes(s.daily as number) ? s.daily : undefined,
+    moves: str(s.moves, MAX_MOVES) && /^[URFDLB]['2]?\/\d+( [URFDLB]['2]?\/\d+)*$/.test(s.moves) ? s.moves : undefined,
   };
 }
 
 export function cleanDrillAttempt(v: unknown): DrillAttempt | null {
   const a = v as Partial<DrillAttempt> | null;
   if (!a || !str(a.id, 50) || !a.id || typeof a.ok !== "boolean" || !time(a.ms) || !time(a.at)) return null;
-  return { id: a.id, ok: a.ok, ms: ms(a.ms), revealed: a.revealed === true, hinted: typeof a.hinted === "boolean" ? a.hinted : undefined, timed: a.timed === true || undefined, at: Math.round(a.at) };
+  return { id: a.id, ok: a.ok, ms: ms(a.ms), revealed: a.revealed === true, hinted: typeof a.hinted === "boolean" ? a.hinted : undefined, timed: a.timed === true || undefined,
+    recogMs: time(a.recogMs) ? ms(a.recogMs) : undefined,
+    execMs: time(a.execMs) ? ms(a.execMs) : undefined,
+    moveCount: time(a.moveCount) ? Math.min(10000, Math.round(a.moveCount)) : undefined,
+    cube: a.cube === true || undefined,
+    at: Math.round(a.at) };
 }
 
 export const cleanList = <T>(v: unknown, clean: (x: unknown) => T | null): T[] =>

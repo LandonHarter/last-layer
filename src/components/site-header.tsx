@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { BookOpenIcon, ChartLineIcon, GraduationCapIcon, Grid3x3Icon, TargetIcon, TimerIcon, WrenchIcon, type LucideIcon } from "lucide-react";
 import { AccountMenu } from "@/components/account-menu";
 import { BackupMenu } from "@/components/backup-menu";
+import { SmartCubeButton } from "@/components/smartcube/connect-button";
 import { ThemeSelector } from "@/components/theme-selector";
 import { MODE_HOME, modeForPath, setStoredMode, useStoredMode, type Mode } from "@/lib/mode";
 import { cn } from "@/lib/utils";
@@ -103,6 +104,7 @@ export function SiteHeader() {
           })}
         </nav>
         <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
+          <SmartCubeButton />
           <BackupMenu />
           <ThemeSelector />
           <AccountMenu />

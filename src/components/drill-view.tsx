@@ -23,6 +23,9 @@ import { HOLD, PUZZLE_NAMES, setLabel, setsOf, type Puzzle } from "@/lib/puzzles
 import { createStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { PageIntro } from "@/components/page-intro";
+import { CubeAnswerLine } from "@/components/smartcube/cube-answer-line";
+import { useCubeAnswer } from "@/components/smartcube/use-cube-answer";
+import type { AttemptResult } from "@/lib/smartcube/matcher";
 
 type StatusFilter = "learning" | "learned" | "both";
 /** Sets you've picked, across every puzzle, so each puzzle remembers its own. `timed` hides the case and times you. */
@@ -301,13 +304,33 @@ function Session({
     return () => root.removeAttribute("data-timing");
   }, [phase]);
 
+  // A smart cube answers by itself: solving the virtual case is Got it; a miss shows the algorithm first.
+  const [cubeMiss, setCubeMiss] = useState<AttemptResult | null>(null);
+  const answerRef = useRef<(success: boolean, cube?: AttemptResult) => void>(() => {});
+  const cube = useCubeAnswer(alg, main, `${session.current}:${session.done}`, !timed && !cubeMiss, (r) => {
+    if (r.ok) return answerRef.current(true, r);
+    setCubeMiss(r);
+    setRevealed(true);
+  });
+
   const answer = useCallback(
-    (success: boolean) => {
+    (success: boolean, cubeResult?: AttemptResult) => {
       if (!canAnswer) return;
       const wasLearned = entryFor(getProgress(), alg.id).status === "learned";
       recordAttempt(alg.id, success);
-      const ms = timed ? elapsed : performance.now() - shownAt.current;
-      logDrillAttempt({ id: alg.id, ok: success, ms: Math.round(ms), revealed, hinted, ...(timed && { timed: true }), at: Date.now() });
+      const turned = cubeResult ?? cubeMiss ?? cube.take();
+      const ms = timed ? elapsed : turned ? turned.recogMs + turned.execMs : performance.now() - shownAt.current;
+      logDrillAttempt({
+        id: alg.id,
+        ok: success,
+        ms: Math.round(ms),
+        revealed,
+        hinted,
+        ...(timed && { timed: true }),
+        ...(turned && { recogMs: Math.round(turned.recogMs), execMs: Math.round(turned.execMs), moveCount: turned.moveCount, cube: true }),
+        at: Date.now(),
+      });
+      setCubeMiss(null);
       if (!success && wasLearned) {
         toast(`Missed ${alg.name}`, {
           description: "It's marked Learned. Move it back to get more practice?",
@@ -328,8 +351,9 @@ function Session({
         missed: session.missed + (success ? 0 : 1),
       });
     },
-    [alg, canAnswer, timed, elapsed, revealed, hinted, session, filter, setSession],
+    [alg, canAnswer, timed, elapsed, revealed, hinted, session, filter, setSession, cube, cubeMiss],
   );
+  answerRef.current = answer;
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -464,6 +488,11 @@ function Session({
                   </Button>
                 )}
                 <StatusToggle id={alg.id} status={entry.status} size="default" className="max-w-md" />
+                {cubeMiss ? (
+                  <CubeAnswerLine missed={cubeMiss} />
+                ) : (
+                  cube.active && <CubeAnswerLine turns={cube.turns} />
+                )}
               </div>
             ) : timed ? (
               phase === "setup" ? (
@@ -477,6 +506,7 @@ function Session({
               )
             ) : (
               <div className="flex flex-col gap-4">
+                {cube.active && <CubeAnswerLine turns={cube.turns} />}
                 {hinted && (notes || editingNotes) && <Notes id={alg.id} notes={entry.notes} editing={editingNotes} setEditing={setEditingNotes} />}
                 <div className="flex gap-3">
                   {notes && !hinted && (

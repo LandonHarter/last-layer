@@ -23,6 +23,8 @@ export type Solve = {
   pll?: string;
   /** Counted toward that day's daily average of this many solves (see `daily.ts`). */
   daily?: number;
+  /** Smart cube solves: every turn with its time from the start, encoded by `encodeMoves` (`smartcube/moves.ts`). */
+  moves?: string;
 };
 
 /** The last-layer steps a solve can be tagged with. */
@@ -49,10 +51,24 @@ export type TimerSettings = {
   /** Show the running time, or just "Solving". */
   showRunning: boolean;
   /** Start and stop with Space (or a tap), read a Stackmat plugged into an audio input, or type each time in. */
-  input: "keyboard" | "stackmat" | "typing";
+  input: "keyboard" | "stackmat" | "typing" | "cube";
   /** The audio input the Stackmat is on; empty for the default one. */
   stackmatDevice: string;
+  /** Film each solve from inspection (or hold) until `videoTailMs` after it stops. */
+  videoOn: boolean;
+  /** The camera to film with; empty for the default one. */
+  videoDevice: string;
+  /** How long to keep filming after the clock stops. */
+  videoTailMs: number;
+  /** Which clips are saved to the account without asking (see `video/rules.ts`). */
+  videoSave: VideoSaveRule;
+  /** For `under`: save solves faster than this. */
+  videoUnderMs: number;
+  /** For `top`: save solves among the session's best this many. */
+  videoTopN: number;
 };
+
+export type VideoSaveRule = "none" | "all" | "under" | "top" | "pb";
 
 const settingsStore = createStore<TimerSettings>("last-layer:timer-settings:v1", {
   holdMs: 300,
@@ -60,6 +76,12 @@ const settingsStore = createStore<TimerSettings>("last-layer:timer-settings:v1",
   showRunning: true,
   input: "keyboard",
   stackmatDevice: "",
+  videoOn: false,
+  videoDevice: "",
+  videoTailMs: 3000,
+  videoSave: "none",
+  videoUnderMs: 10000,
+  videoTopN: 5,
 });
 export const useTimerSettings = settingsStore.use;
 export const updateTimerSettings = (change: Partial<TimerSettings>) => settingsStore.update((s) => ({ ...s, ...change }));
@@ -196,6 +218,12 @@ export type DrillAttempt = {
   hinted?: boolean;
   /** Whether it was a timed drill, with the case image hidden. */
   timed?: boolean;
+  /** Answered by turning a smart cube: case shown to first turn, and first turn to solved (or given up). */
+  recogMs?: number;
+  execMs?: number;
+  /** Turns made, with consecutive turns of one face merged. */
+  moveCount?: number;
+  cube?: boolean;
   at: number;
 };
 
