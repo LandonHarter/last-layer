@@ -4,6 +4,7 @@ import { applyAlg, normalizeOrientation, solvedCube } from "../cube";
 import { CaseAttempt, EXTRA_TURNS, PAUSE_MS, reportedTurns } from "./matcher";
 import { decodeMoves, encodeMoves, fitTimes, htm, mergeQuarterTurns } from "./moves";
 import { ScrambleGuide } from "./guide";
+import { Batcher, ClockOffset, newPairCode, PAIR_CODE_RE, readPairCode } from "./relay";
 import { computeSplits, identifyCases } from "./splits";
 import { fromFacelets, gripMap, reportsFor, SOLVED_FACELETS, toFacelets, toGrip } from "./state";
 
@@ -144,5 +145,64 @@ describe("scramble guide", () => {
   });
   test("lost when the cube isn't solved or on the way", () => {
     expect(new ScrambleGuide(scramble, applyAlg(solvedCube(), "B")).current).toEqual({ kind: "lost" });
+  });
+});
+
+describe("relay", () => {
+  test("pairing codes", () => {
+    for (let i = 0; i < 50; i++) expect(newPairCode()).toMatch(PAIR_CODE_RE);
+    expect(readPairCode(" abc 234 ")).toBe("ABC234");
+    expect(readPairCode("ABC23")).toBeNull();
+    expect(readPairCode("ABC230")).toBeNull();
+  });
+
+  test("clock offset takes the fastest message and never maps into the future", () => {
+    const o = new ClockOffset(1000);
+    expect(o.toLocal(50)).toBe(50);
+    // The other clock is 10 000 ms behind; messages take 80, 20, 140 ms.
+    o.sample(100, 10_180);
+    o.sample(200, 10_220);
+    o.sample(300, 10_440);
+    expect(o.toLocal(300)).toBe(10_320);
+    expect(o.toLocal(300)).toBeLessThanOrEqual(10_440);
+    // The fast sample ages out of the window.
+    o.sample(2000, 12_100);
+    expect(o.toLocal(2000)).toBe(12_100);
+    o.reset();
+    expect(o.toLocal(5)).toBe(5);
+  });
+
+  test("batcher keeps order, batches while busy and retries failures", async () => {
+    const sent: number[][] = [];
+    let fail = 1;
+    let release: () => void = () => {};
+    const b = new Batcher<number>(
+      async (items) => {
+        await new Promise<void>((r) => (release = r));
+        if (fail-- > 0) throw new Error("dropped");
+        sent.push(items);
+      },
+      0,
+      () => 0,
+      async () => {},
+    );
+    const tick = () => new Promise((r) => setTimeout(r, 0));
+    b.push(1);
+    await tick();
+    b.push(2);
+    b.push(3);
+    release(); // 1 fails, comes back to the front
+    await tick();
+    release(); // 1, 2, 3 together
+    await tick();
+    b.push(4);
+    await tick();
+    release();
+    await tick();
+    expect(sent).toEqual([[1, 2, 3], [4]]);
+    b.stop();
+    b.push(5);
+    await tick();
+    expect(sent).toEqual([[1, 2, 3], [4]]);
   });
 });

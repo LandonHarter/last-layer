@@ -4,6 +4,7 @@ import { useSyncExternalStore } from "react";
 import { applyAlg, solvedCube, type Face, type Sticker } from "../cube";
 import { createStore } from "../store";
 import type { RawMove } from "./moves";
+import { Batcher, ClockOffset, countRole, newPairCode, openRelay, type Relay, type RelayCmd, type RelayMsg } from "./relay";
 import { fromFacelets, gripMap, reportsFor, SOLVED_FACELETS, toFacelets, toGrip } from "./state";
 
 /**
@@ -25,14 +26,18 @@ export type CubeSnapshot = {
   facelets: string;
   /** Asking for the cube's MAC address, which GAN cubes need to decrypt their messages. */
   macRequest?: { device: string };
+  /** Using a cube connected on another device. `waiting` until that device sends it. */
+  remote?: { code: string; waiting: boolean };
+  /** Sending this cube to other devices; `screens` is how many are listening. */
+  sharing?: { code?: string; screens: number; error?: string };
 };
 
 export type CubeTurn = RawMove & { state: Sticker[] };
 
 type Connection = { disconnect(): Promise<void>; requestFacelets?(): Promise<void>; reset?(): Promise<void> };
 
-const supported = () => typeof navigator !== "undefined" && "bluetooth" in navigator;
-let snapshot: CubeSnapshot = { status: supported() ? "idle" : "unsupported", facelets: SOLVED_FACELETS };
+export const webBluetooth = () => typeof navigator !== "undefined" && "bluetooth" in navigator;
+let snapshot: CubeSnapshot = { status: webBluetooth() ? "idle" : "unsupported", facelets: SOLVED_FACELETS };
 let state: Sticker[] = solvedCube();
 let connection: Connection | null = null;
 let macResolve: ((mac: string | null) => void) | null = null;
@@ -77,14 +82,21 @@ function gotFacelets(facelets: string) {
   try {
     state = fromFacelets(facelets);
     set({ facelets });
+    share?.sendState();
   } catch {
     // A garbled report: keep tracking from turns.
   }
 }
 
+function gotBattery(battery: number) {
+  set({ battery });
+  share?.batcher.push({ type: "battery", battery });
+}
+
 function dropped() {
   connection = null;
-  set({ status: supported() ? "idle" : "unsupported", battery: undefined, name: undefined, virtual: undefined });
+  stopSharing();
+  set({ status: webBluetooth() ? "idle" : "unsupported", battery: undefined, name: undefined, virtual: undefined, remote: undefined });
 }
 
 // ---------------------------------------------------------------------------
@@ -144,7 +156,7 @@ export async function connectCube() {
       else if (e.type === "FACELETS" && awaitingFacelets) {
         awaitingFacelets = false;
         gotFacelets(e.facelets);
-      } else if (e.type === "BATTERY") set({ battery: e.batteryLevel });
+      } else if (e.type === "BATTERY") gotBattery(e.batteryLevel);
       else if (e.type === "DISCONNECT") dropped();
     });
     connection = {
@@ -178,12 +190,138 @@ export async function disconnectCube() {
 export async function markSolved() {
   state = solvedCube();
   set({ facelets: SOLVED_FACELETS });
+  share?.sendState();
   await connection?.reset?.().catch(() => {});
 }
 
 /** Ask the cube for its stickers again. */
 export async function resyncCube() {
   await connection?.requestFacelets?.().catch(() => {});
+}
+
+// ---------------------------------------------------------------------------
+// The relay (`relay.ts`): use a cube connected on another device, or send this one.
+
+/**
+ * Use the cube another device has connected and is sharing. Listens on a new pairing
+ * code's channel and, signed in, the account's, so either way of sharing finds it.
+ */
+export async function connectRemoteCube() {
+  if (connection || snapshot.status === "connecting") return;
+  const code = newPairCode();
+  set({ status: "connecting", error: undefined, remote: { code, waiting: true } });
+  let relay: Relay;
+  try {
+    relay = await openRelay("screen", code);
+  } catch (e) {
+    set({ status: "error", error: e instanceof Error ? e.message : String(e), remote: undefined });
+    return;
+  }
+  // Another connect or a cancel won while the relay opened.
+  if (connection || snapshot.remote?.code !== code) return relay.close();
+
+  const offset = new ClockOffset();
+  // The channel the cube side was last heard on; commands go there.
+  let active = relay.channels[0];
+  let live = false;
+  const waiting = () => {
+    live = false;
+    offset.reset();
+    set({ status: "connecting", remote: { code, waiting: true } });
+  };
+  const ask = (cmd: RelayCmd) => active.publish("cmd", cmd).catch(() => {});
+
+  for (const channel of relay.channels) {
+    channel.on<{ msgs: RelayMsg[] }>("msgs", ({ msgs }) => {
+      active = channel;
+      const now = performance.now();
+      for (const m of msgs) if (m.type === "turn") offset.sample(m.t, now);
+      for (const m of msgs) {
+        if (m.type === "cube") {
+          gotFacelets(m.facelets);
+          live = true;
+          set({ status: "connected", name: m.name, battery: m.battery, virtual: false, remote: { code, waiting: false } });
+        } else if (m.type === "battery") set({ battery: m.battery });
+        else if (live) turned(m.move, offset.toLocal(m.t), m.cube);
+      }
+    });
+    channel.on("bye", () => channel === active && waiting());
+    channel.onPresence(({ action, member }) => {
+      const role = (member.info as { role?: string } | undefined)?.role;
+      if (role !== "cube") return;
+      if (action === "join") channel.publish("cmd", { type: "want" } satisfies RelayCmd).catch(() => {});
+      else if (channel === active && countRole(channel, "cube") === 0) waiting();
+    });
+    channel.publish("cmd", { type: "want" } satisfies RelayCmd).catch(() => {});
+  }
+  // After a reconnect, ask for the cube again (turns may have been missed).
+  relay.connection.on("state", (s) => {
+    if (s !== "open") return;
+    for (const c of relay.channels) c.ready().then(() => c.publish("cmd", { type: "want" } satisfies RelayCmd)).catch(() => {});
+  });
+
+  connection = {
+    disconnect: async () => relay.close(),
+    requestFacelets: () => ask({ type: "facelets" }),
+    reset: () => ask({ type: "reset" }),
+  };
+}
+
+let share: { relay: Relay; batcher: Batcher<RelayMsg>; sendState(): void; stop(): void } | null = null;
+
+/** Send this device's cube to other devices: with a code from the other device, or (no code) to the account's. */
+export async function shareCube(code?: string) {
+  if (share || snapshot.status !== "connected" || snapshot.remote) return;
+  set({ sharing: { code, screens: 0 } });
+  let relay: Relay;
+  try {
+    relay = await openRelay("cube", code, true);
+  } catch (e) {
+    set({ sharing: { code, screens: 0, error: e instanceof Error ? e.message : String(e) } });
+    return;
+  }
+  // Stopped (or the cube dropped) while the relay opened.
+  if (!snapshot.sharing || snapshot.sharing.code !== code || snapshot.status !== "connected") return relay.close();
+
+  const channel = relay.channels[0];
+  const batcher = new Batcher<RelayMsg>((msgs) => channel.publish("msgs", { msgs }));
+  const sendState = () =>
+    batcher.push({ type: "cube", name: snapshot.name ?? "Smart cube", battery: snapshot.battery, facelets: toFacelets(state) });
+  const offTurn = onCubeTurn((t) => batcher.push({ type: "turn", move: t.move, t: t.local, cube: t.cube }));
+  const screens = () => set({ sharing: { code, screens: countRole(channel, "screen") } });
+  const offPresence = channel.onPresence(screens);
+  const offCmd = channel.on<RelayCmd>("cmd", (cmd) => {
+    if (cmd.type === "want") sendState();
+    else if (cmd.type === "reset") void markSolved();
+    else if (cmd.type === "facelets") void resyncCube();
+  });
+  const offState = relay.connection.on("state", (s) => {
+    if (s === "open") channel.ready().then(() => (sendState(), screens())).catch(() => {});
+  });
+
+  share = {
+    relay,
+    batcher,
+    sendState,
+    stop: () => {
+      offTurn();
+      offPresence();
+      offCmd();
+      offState();
+      batcher.stop();
+      // Say goodbye before closing, so the screen doesn't wait for presence to time out.
+      channel.publish("bye").catch(() => {}).finally(() => relay.close());
+    },
+  };
+  sendState();
+  screens();
+}
+
+export function stopSharing() {
+  const s = share;
+  share = null;
+  s?.stop();
+  if (snapshot.sharing) set({ sharing: undefined });
 }
 
 // ---------------------------------------------------------------------------
